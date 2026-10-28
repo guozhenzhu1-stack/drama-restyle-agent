@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>百度一镜 · 短剧 Agent</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- ============ 左侧导航 ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="logo"></span>
+      <strong>百度一镜</strong>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="nav-foot">
+      <div class="foot-icons"><span>📖</span><span>🔔</span><span>API</span></div>
+      <div class="sub">★ 我的订阅</div>
+      <div class="me"><span class="avatar">🐼</span>无敌小熊猫</div>
+    </div>
+  </aside>
+
+  <!-- ============ 主区 ============ -->
+  <main class="main" id="main"></main>
+</div>
+
+<!-- 弹窗 -->
+<div class="modal-mask" id="modalMask" hidden><div class="modal" id="modal"></div></div>
+<!-- 轻提示 -->
+<div class="toast" id="toast" hidden></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
