@@ -10,7 +10,7 @@
 
 ## 在线体验
 
-GitHub Pages 部署完成后，可直接通过仓库的 Pages 地址访问。
+https://guozhenzhu1-stack.github.io/drama-restyle-agent/
 
 ## 本地运行
 
