@@ -901,9 +901,9 @@ function assetHTML(){
   const tools = state.assetBatch
     ? `<label class="selall"><input type="checkbox" id="selAll">全选</label>
        <button class="aghost" id="cancelBatch">取消</button>
-       <button class="aghost" id="exportAssets">⬇ 导出资产表</button>
+       <button class="aghost" id="exportAssets">⬇ 导出 Excel 资产表</button>
        <button class="aprimary" id="genAll">生成所选</button>`
-    : `<button class="aghost" id="exportAssets">⬇ 导出资产表</button>
+    : `<button class="aghost" id="exportAssets">⬇ 导出 Excel 资产表</button>
        <button class="aprimary" id="batchStart">批量生成</button>`;
   return `
     <div class="subtabs">
