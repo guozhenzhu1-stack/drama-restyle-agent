@@ -10,7 +10,7 @@ const STYLES = [
   { key: "cnanime", name: "3D动漫风格" },
 ];
 const RATIOS = ["16:9", "9:16", "4:3", "3:4", "21:9", "1:1"];
-const RESOS  = ["720P", "1080P", "2K", "4K"];
+const RESOS  = ["720P", "1080P"];
 
 /* 每种风格对画面的调色/描边策略 */
 const STYLE_FX = {
@@ -230,51 +230,6 @@ const SCRIPT_CAST = {
   ljq: { zh:"林嘉琪", role:"男主", en:"Jason Lin",   ja:"柏木 玲二", ko:"임재현", es:"Jason Lin",
          zhOf:{ en:"杰森·林", ja:"柏木玲二", ko:"林载贤", es:"杰森·林" } },
 };
-/* 剧名/分集标题本土化（页面上与中文原名对照展示） */
-const PROJECT_TITLE_I18N = {
-  "重生之不再爱了": {
-    en:"Reborn, I No Longer Love You",
-    ja:"生まれ変わったら、もう愛さない",
-    ko:"다시 태어나도, 더는 사랑하지 않아",
-    es:"Renacida, Ya No Te Amo",
-  },
-};
-const EP_TITLE_I18N = {
-  "她死在那个雨夜": { en:"She Died on That Rainy Night", ja:"彼女はあの雨の夜に死んだ", ko:"그녀는 그 비 오는 밤에 죽었다", es:"Ella murió esa noche de lluvia" },
-  "回到两年前": { en:"Back to Two Years Ago", ja:"二年前へ", ko:"2년 전으로", es:"De vuelta a dos años atrás" },
-  "离婚不是开玩笑": { en:"Divorce Is No Joke", ja:"離婚は冗談じゃない", ko:"이혼은 농담이 아니다", es:"El divorcio no es un juego" },
-  "闺蜜的眼泪": { en:"A Best Friend's Tears", ja:"親友の涙", ko:"절친의 눈물", es:"Las lágrimas de una amiga" },
-  "收回属于我的股份": { en:"Taking Back My Shares", ja:"私の株を取り戻す", ko:"내 지분을 되찾다", es:"Recuperar mis acciones" },
-  "迟来的道歉": { en:"A Late Apology", ja:"遅すぎた謝罪", ko:"뒤늦은 사과", es:"Una disculpa tardía" },
-  "她不再回头": { en:"She Won't Look Back", ja:"彼女はもう振り返らない", ko:"그녀는 돌아보지 않는다", es:"Ella no volverá a mirar atrás" },
-  "闺蜜的第二张面孔": { en:"The Best Friend's Second Face", ja:"親友のもう一つの顔", ko:"절친의 두 번째 얼굴", es:"La segunda cara de la amiga" },
-  "被藏起来的真相": { en:"The Hidden Truth", ja:"隠された真実", ko:"감춰진 진실", es:"La verdad oculta" },
-  "属于她的股份": { en:"The Shares That Belong to Her", ja:"彼女に属する株", ko:"그녀의 몫인 지분", es:"Las acciones que le pertenecen" },
-  "董事会上的反击": { en:"Counterattack at the Board Meeting", ja:"取締役会での反撃", ko:"이사회에서의 반격", es:"Contraataque en la junta" },
-  "谁才是真正的敌人": { en:"Who Is the Real Enemy", ja:"本当の敵は誰か", ko:"진짜 적은 누구인가", es:"¿Quién es el verdadero enemigo?" },
-  "一段被删掉的记忆": { en:"A Deleted Memory", ja:"消された記憶", ko:"지워진 기억", es:"Un recuerdo borrado" },
-  "温柔背后的刀": { en:"The Knife Behind the Tenderness", ja:"優しさの裏の刃", ko:"다정함 뒤의 칼", es:"El cuchillo tras la ternura" },
-  "这一次，轮到我": { en:"This Time, It's My Turn", ja:"今度は、私の番", ko:"이번엔 내 차례", es:"Esta vez, me toca a mí" },
-  "雨夜里的陌生人": { en:"The Stranger in the Rain", ja:"雨の夜の見知らぬ人", ko:"비 오는 밤의 낯선 사람", es:"El extraño en la noche de lluvia" },
-  "那场事故不简单": { en:"That Accident Was No Accident", ja:"あの事故は単純じゃない", ko:"그 사고는 단순하지 않다", es:"Ese accidente no fue casualidad" },
-  "消失的行车记录": { en:"The Missing Dashcam Footage", ja:"消えたドライブレコーダー", ko:"사라진 블랙박스", es:"La grabación que desapareció" },
-  "唯一的目击者": { en:"The Only Witness", ja:"唯一の目撃者", ko:"유일한 목격자", es:"El único testigo" },
-  "有人比她更恨他": { en:"Someone Hates Him More Than She Does", ja:"彼女以上に彼を恨む人", ko:"그녀보다 그를 더 미워하는 사람", es:"Alguien lo odia más que ella" },
-  "母亲留下的信": { en:"The Letter from Her Mother", ja:"母が残した手紙", ko:"어머니가 남긴 편지", es:"La carta de su madre" },
-  "被篡改的遗嘱": { en:"The Tampered Will", ja:"改ざんされた遺言状", ko:"조작된 유언장", es:"El testamento manipulado" },
-  "她亲手设下的局": { en:"The Trap She Set Herself", ja:"彼女が自ら仕掛けた罠", ko:"그녀가 직접 꾸민 함정", es:"La trampa que ella misma tendió" },
-  "证人突然改口": { en:"The Witness Changes Her Story", ja:"証人が突然の証言変更", ko:"증인의 돌연한 진술 번복", es:"El testigo cambia su declaración" },
-  "幕后还有一人": { en:"Someone Else Behind the Scenes", ja:"黒幕はもう一人いる", ko:"배후에 또 한 사람", es:"Hay alguien más detrás" },
-  "一夜之间的翻盘": { en:"A Reversal Overnight", ja:"一夜にしての逆転", ko:"하룻밤 사이의 역전", es:"Un vuelco de la noche a la mañana" },
-};
-function epTitleI18n(ep, lang){
-  const m = EP_TITLE_I18N[ep.title];
-  return (m && m[lang]) || ep.title;
-}
-function projectTitleI18n(title, lang){
-  const m = PROJECT_TITLE_I18N[title];
-  return (m && m[lang]) || title;
-}
 /* 场次素材池：按目标语种提供成套本土化文本 */
 const SCRIPT_SCENES = [
   {
@@ -675,17 +630,17 @@ const SHOTS = [
 /* ---- 可编辑运行态 ---- */
 const state = {
   screen:"landing",                       // landing | project
-  landing:{ tab:"restyle", toggle:"film", style:"real", modelVideo:"Minimax H3 MAX", modelImage:"image2.5", region:REGIONS[1], ratio:"16:9", reso:"720P", query:"" },
+  landing:{ tab:"restyle", toggle:"film", style:"real", modelVideo:"Minimax H3 MAX", modelImage:"image2.5", region:REGIONS[1], ratio:"16:9", reso:"720P", query:"", panLink:"", panCode:"", panLoading:false },
   project:{ title:"重生之不再爱了", style:"real", modelVideo:MODELS_VIDEO[0], modelImage:MODELS_IMAGE[0], ratio:"16:9", reso:"720P", region:REGIONS[1] },
   stage:"clips",                          // clips | script | asset | shot | film
   assetTab:"character",                   // character | scene | prop
   clips: CLIPS.map(x=>({...x})),
+  clipSource: "demo",                     // demo | pan（百度网盘导入）
   episodes: EPISODES,
   epScripts: EP_SCRIPTS,                  // 当前剧本（可被上传替换）
   scriptSource: { name:"示例剧本（Demo）", demo:true, at:null },
   activeEp: 0,
   scriptEp: 0,                            // 剧本本土化当前集
-  showOrig: true,                         // 剧本是否对照中文原文
   assets: JSON.parse(JSON.stringify(ASSETS)),
   assetDone: {},                          // id -> true 已生成（整项资产/角色全部妆造）
   lookDone: {},                           // lookId -> true 已生成（单套妆造）

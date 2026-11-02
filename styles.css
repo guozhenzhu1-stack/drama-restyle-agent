@@ -82,6 +82,17 @@ button{font-family:inherit}
 .dz-ico svg{opacity:.75}
 .dz-title{margin:12px 0 6px;font-size:15px;font-weight:600;color:var(--text-1)}
 .dz-sub{color:var(--text-3);font-size:12px}
+.pan-import{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.pan-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pan-ico{flex:0 0 auto;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;background:var(--brand-soft);color:var(--accent);font-size:15px}
+.pan-link{flex:1;min-width:240px;height:36px;border:1px solid var(--border-2);border-radius:9px;padding:0 12px;font:inherit;font-size:13px;color:var(--text-1);background:var(--surface-2)}
+.pan-code{width:96px;height:36px;border:1px solid var(--border-2);border-radius:9px;padding:0 12px;font:inherit;font-size:13px;color:var(--text-1);background:var(--surface-2)}
+.pan-link:focus,.pan-code:focus{outline:none;border-color:var(--brand);background:#fff}
+.pan-link::placeholder,.pan-code::placeholder{color:var(--text-4);font-size:13px}
+.pan-btn{height:36px;border:none;border-radius:9px;background:var(--brand-grad);color:#fff;font-size:13px;font-weight:600;padding:0 16px;cursor:pointer;white-space:nowrap}
+.pan-btn:hover{filter:brightness(1.03)}
+.pan-btn[disabled]{opacity:.65;cursor:default;filter:none}
+.pan-hint{margin-top:7px;color:var(--text-3);font-size:12px;padding-left:40px}
 .q-input{width:100%;border:none;resize:none;font:inherit;font-size:15px;color:var(--text-1);padding:18px 2px 14px;background:transparent;min-height:40px}
 .q-input:focus{outline:none}
 .q-input::placeholder{color:var(--text-4)}
@@ -188,17 +199,16 @@ button{font-family:inherit}
 .script-src{display:flex;align-items:center;gap:10px;padding:8px 24px;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:12px;color:var(--text-2);flex:0 0 auto}
 .script-src .src-file{font-weight:600;color:var(--text-1)}
 .script-src .src-meta{color:var(--text-3)}
-.script-src .src-hint{color:var(--text-4)}
+.script-src .src-hint{color:var(--text-3)}
+.script-src .src-hint b{color:var(--accent);font-weight:600}
 .script-src.is-upload{background:var(--brand-soft)}
 .script-src .src-restore{margin-left:auto;border:1px solid var(--border-2);background:var(--surface);color:var(--text-2);font-size:12px;padding:4px 10px;border-radius:7px;cursor:pointer}
 .script-src .src-restore:hover{border-color:var(--brand);color:var(--accent)}
 .script-scroll{flex:1;overflow:auto;padding:20px 24px 44px;scroll-behavior:smooth}
 .script-doc{max-width:780px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:30px 40px 34px;box-shadow:var(--shadow-1)}
-.script-doc.hide-orig .sc-orig,.script-doc.hide-orig .sc-head-zh{display:none}
 .doc-kicker{font-size:11px;letter-spacing:1.4px;color:var(--brand);font-weight:700}
 .doc-cover{padding-bottom:18px}
 .doc-cover-title{margin:8px 0 6px;font-size:26px;letter-spacing:.5px}
-.doc-cover-zh{font-size:13px;color:var(--text-3);letter-spacing:.6px;margin-bottom:4px}
 .doc-sub{font-size:12px;color:var(--text-3)}
 .adapt-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-bottom:16px;border-bottom:1px solid var(--border)}
 .adapt-chips span{font-size:11px;color:var(--text-2);background:var(--surface-2);padding:3px 9px;border-radius:6px}
@@ -210,14 +220,12 @@ button{font-family:inherit}
 .sc-block{margin-top:22px}
 .sc-head{display:flex;align-items:baseline;gap:10px;font-size:13px;font-weight:700;letter-spacing:.3px;border-bottom:1px dashed var(--border-2);padding-bottom:8px}
 .sc-head-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
-.sc-head-zh{font-size:11px;font-weight:400;letter-spacing:0;color:var(--text-3)}
 .sc-num{flex:0 0 auto;font-size:11px;font-weight:600;color:var(--accent);background:var(--brand-soft);padding:2px 7px;border-radius:5px;letter-spacing:0}
 .sc-action{margin:10px 0 0;font-size:14px;line-height:1.9;color:var(--text-2)}
 .sc-line{margin-top:12px;padding-left:13px;border-left:2px solid var(--border-2)}
 .sc-who{display:flex;align-items:baseline;gap:8px;font-size:12px;font-weight:700;letter-spacing:.4px}
 .sc-who small{font-size:11px;font-weight:400;letter-spacing:0;color:var(--text-3)}
 .sc-text{margin:4px 0 0;font-size:14px;line-height:1.85}
-.sc-orig{margin:3px 0 0;font-size:12px;line-height:1.8;color:var(--text-3)}
 .doc-end{margin-top:28px;padding-top:16px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text-4);letter-spacing:2px}
 
 /* ---- 工作面板 ---- */
@@ -240,9 +248,10 @@ button{font-family:inherit}
 .clip-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .clip-play{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:22px;background:rgba(0,0,0,.18)}
 .clip-dur{position:absolute;left:9px;bottom:9px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:2px 7px;border-radius:6px}
-.clip-meta{display:flex;align-items:center;justify-content:space-between;margin-top:9px}
-.clip-meta span{font-size:14px;font-weight:600}
-.clip-del{border:none;background:transparent;color:var(--text-3);cursor:pointer;font-size:13px}
+.clip-src{position:absolute;right:9px;top:9px;background:rgba(255,255,255,.92);color:var(--accent);font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px}
+.clip-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:9px}
+.clip-meta span{min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clip-del{flex:0 0 auto;border:none;background:transparent;color:var(--text-3);cursor:pointer;font-size:13px}
 .clip-del:hover{color:#e8564f}
 .mgr-tip{color:var(--text-3);font-size:12px;margin-top:18px}
 /* ---- 资产面板 ---- */
