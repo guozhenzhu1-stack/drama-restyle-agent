@@ -73,6 +73,8 @@ function render(){
 /* ===================== 落地页（入口） ===================== */
 function renderLanding(){
   const L = state.landing;
+  const isFilm = L.toggle === 'film';
+  const isRestyle = L.toggle === 'restyle';
   $('#main').innerHTML = `
   <div class="landing">
     <div class="hero">
@@ -89,10 +91,10 @@ function renderLanding(){
         <div class="entry-body">
           <div class="dropzone" id="drop">
             <div class="dz-ico">${ICON.upload}</div>
-            <div class="dz-title">${L.tab==='restyle'?'上传视频':'上传剧本'}</div>
-            <div class="dz-sub">${L.tab==='restyle'?'支持上传 mp4 格式，单个大小不超过 100M，最多上传 100 个视频':'支持上传 txt / docx / pdf 文件'}</div>
+            <div class="dz-title">${isRestyle?'上传视频':'上传剧本'}</div>
+            <div class="dz-sub">${isRestyle?'支持上传 mp4 格式，单个大小不超过 100M，最多上传 100 个视频':'支持上传 txt / docx / pdf 文件'}</div>
           </div>
-          ${L.tab==='restyle'?`
+          ${isRestyle?`
           <div class="pan-import">
             <div class="pan-row">
               <span class="pan-ico">☁</span>
@@ -103,12 +105,12 @@ function renderLanding(){
             <div class="pan-hint">Agent 会自动拉取该文件夹内的全部视频文件，并加入「原片管理」</div>
           </div>`:''}
           <textarea class="q-input" id="q" placeholder="输入你的改编想法…">${esc(L.query)}</textarea>
-          <div class="entry-toolbar">
+          ${isFilm?'':`<div class="entry-toolbar">
             <div class="tool" id="tStyle"><span class="ti">${ICON.wand}</span>${styleName(L.style)}<span class="chev">⌄</span></div>
             <div class="tool" id="tRegion"><span class="ti">${ICON.wand}</span>${esc(L.region)}<span class="chev">⌄</span></div>
             <div class="tool" id="tRatio"><span class="ti">${ICON.monitor}</span><span class="sub" data-r="ratio" title="选择画幅比例">${L.ratio}<span class="chev">⌄</span></span><i class="tsep">|</i><span class="sub" data-r="reso" title="选择分辨率">${L.reso}<span class="chev">⌄</span></span></div>
             <button class="send-btn" id="go">${ICON.send}</button>
-          </div>
+          </div>`}
         </div>
       </div>
     </div>
@@ -127,17 +129,21 @@ function bindLanding(){
     L.tab = L.toggle==='script' ? 'script' : 'restyle';
     renderLanding();
   });
-  $('#tStyle').onclick = e=> openMenu(e.currentTarget, STYLES.map(s=>s.name), (_,i)=>{ L.style=STYLES[i].key; renderLanding(); });
-  $('#tRegion').onclick= e=> openMenu(e.currentTarget, REGIONS, v=>{ L.region=v; renderLanding(); });
-  $('#tRatio').onclick = e=>{
-    const t = e.target.closest('[data-r]');
-    const anchor = t || e.currentTarget;
-    if(t && t.dataset.r==='reso') openMenu(anchor, RESOS, v=>{ L.reso=v; renderLanding(); });
-    else openMenu(anchor, RATIOS, v=>{ L.ratio=v; renderLanding(); });
-  };
+  const tStyle = $('#tStyle');
+  if(tStyle){
+    tStyle.onclick = e=> openMenu(e.currentTarget, STYLES.map(s=>s.name), (_,i)=>{ L.style=STYLES[i].key; renderLanding(); });
+    $('#tRegion').onclick= e=> openMenu(e.currentTarget, REGIONS, v=>{ L.region=v; renderLanding(); });
+    $('#tRatio').onclick = e=>{
+      const t = e.target.closest('[data-r]');
+      const anchor = t || e.currentTarget;
+      if(t && t.dataset.r==='reso') openMenu(anchor, RESOS, v=>{ L.reso=v; renderLanding(); });
+      else openMenu(anchor, RATIOS, v=>{ L.ratio=v; renderLanding(); });
+    };
+  }
   $('#q').oninput = e=> L.query = e.target.value;
   $('#drop').onclick = startProject;
-  $('#go').onclick   = startProject;
+  const go = $('#go');
+  if(go) go.onclick = startProject;
   const panBtn = $('#panImport');
   if(panBtn){
     const panLink = $('#panLink'), panCode = $('#panCode');
