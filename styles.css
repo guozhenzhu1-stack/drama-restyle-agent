@@ -66,15 +66,6 @@ button{font-family:inherit}
 .seg button.on{background:var(--brand-grad);color:#fff;box-shadow:0 4px 12px rgba(106,92,246,.35)}
 
 .entry-card{position:relative;z-index:1;max-width:1240px;margin:30px auto 0;background:#fff;border-radius:20px;box-shadow:var(--shadow-2);overflow:hidden}
-.entry-tabs{display:flex;background:#eef1f8}
-.etab{flex:1;position:relative;border:none;background:#eef1f8;text-align:left;padding:22px 30px;cursor:pointer;display:flex;flex-direction:column;gap:6px;overflow:hidden;transition:.15s}
-.etab b{font-size:18px;font-weight:700;color:var(--text-3)}
-.etab em{font-style:normal;font-size:13px;color:var(--text-4)}
-.etab.on{background:#fff;border-radius:0 18px 0 0}
-.etab.on:first-child{border-radius:18px 0 0 0}
-.etab.on b{color:var(--accent)}
-.etab.on em{color:var(--text-2)}
-.etab-ill{position:absolute;right:18px;top:50%;transform:translateY(-50%) rotate(6deg);opacity:.9;line-height:0}
 .entry-body{padding:24px 30px 26px}
 .dropzone{border:none;border-radius:14px;background:#e9eefb;padding:46px;text-align:center;cursor:pointer;transition:.15s}
 .dropzone:hover{background:#e0e7fb}

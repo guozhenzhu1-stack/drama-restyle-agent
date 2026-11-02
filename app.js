@@ -73,7 +73,6 @@ function render(){
 /* ===================== 落地页（入口） ===================== */
 function renderLanding(){
   const L = state.landing;
-  const tab = k => L.tab===k?'on':'';
   $('#main').innerHTML = `
   <div class="landing">
     <div class="hero">
@@ -87,10 +86,6 @@ function renderLanding(){
         </span>
         的创作之路</h1>
       <div class="entry-card">
-        <div class="entry-tabs">
-          <button class="etab ${tab('script')}" data-k="script"><b>上传剧本</b><em>轻松创造爆款短剧效果</em></button>
-          <button class="etab ${tab('restyle')}" data-k="restyle"><b>视频转绘</b><em>还原视频剧情，一键出海</em><span class="etab-ill">${ICON.clap}</span></button>
-        </div>
         <div class="entry-body">
           <div class="dropzone" id="drop">
             <div class="dz-ico">${ICON.upload}</div>
@@ -126,8 +121,12 @@ function renderLanding(){
 }
 function bindLanding(){
   const L = state.landing;
-  $$('.hero-seg button').forEach(b=> b.onclick=e=>{ e.stopPropagation(); L.toggle=b.dataset.t; renderLanding(); });
-  $$('.entry-tabs .etab').forEach(b=> b.onclick=()=>{ L.tab=b.dataset.k; renderLanding(); });
+  $$('.hero-seg button').forEach(b=> b.onclick=e=>{
+    e.stopPropagation();
+    L.toggle = b.dataset.t;
+    L.tab = L.toggle==='script' ? 'script' : 'restyle';
+    renderLanding();
+  });
   $('#tStyle').onclick = e=> openMenu(e.currentTarget, STYLES.map(s=>s.name), (_,i)=>{ L.style=STYLES[i].key; renderLanding(); });
   $('#tRegion').onclick= e=> openMenu(e.currentTarget, REGIONS, v=>{ L.region=v; renderLanding(); });
   $('#tRatio').onclick = e=>{
