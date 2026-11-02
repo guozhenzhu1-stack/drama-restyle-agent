@@ -73,11 +73,15 @@ button{font-family:inherit}
 .dz-ico svg{opacity:.75}
 .dz-title{margin:12px 0 6px;font-size:15px;font-weight:600;color:var(--text-1)}
 .dz-sub{color:var(--text-3);font-size:12px}
-.pan-import{margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.upload-source{display:inline-flex;gap:2px;padding:3px;margin-bottom:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px}
+.us-opt{border:none;background:transparent;color:var(--text-3);font:inherit;font-size:13px;font-weight:600;padding:6px 16px;border-radius:8px;cursor:pointer;transition:.15s}
+.us-opt:hover{color:var(--text-1)}
+.us-opt.on{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(30,34,70,.1)}
+.pan-import{margin-top:0;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
 .pan-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pan-ico{flex:0 0 auto;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;background:var(--brand-soft);color:var(--accent);font-size:15px}
 .pan-link{flex:1;min-width:240px;height:36px;border:1px solid var(--border-2);border-radius:9px;padding:0 12px;font:inherit;font-size:13px;color:var(--text-1);background:var(--surface-2)}
-.pan-code{width:96px;height:36px;border:1px solid var(--border-2);border-radius:9px;padding:0 12px;font:inherit;font-size:13px;color:var(--text-1);background:var(--surface-2)}
+.pan-code{width:132px;height:36px;border:1px solid var(--border-2);border-radius:9px;padding:0 12px;font:inherit;font-size:13px;color:var(--text-1);background:var(--surface-2)}
 .pan-link:focus,.pan-code:focus{outline:none;border-color:var(--brand);background:#fff}
 .pan-link::placeholder,.pan-code::placeholder{color:var(--text-4);font-size:13px}
 .pan-btn{height:36px;border:none;border-radius:9px;background:var(--brand-grad);color:#fff;font-size:13px;font-weight:600;padding:0 16px;cursor:pointer;white-space:nowrap}

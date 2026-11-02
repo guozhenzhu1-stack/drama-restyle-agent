@@ -694,7 +694,7 @@ const SHOTS = [
 /* ---- 可编辑运行态 ---- */
 const state = {
   screen:"landing",                       // landing | project
-  landing:{ tab:"restyle", toggle:"film", style:"real", modelVideo:"Minimax H3 MAX", modelImage:"image2.5", region:REGIONS[1], ratio:"16:9", reso:"720P", query:"", panLink:"", panCode:"", panLoading:false },
+  landing:{ tab:"restyle", toggle:"film", videoSource:"local", style:"real", modelVideo:"Minimax H3 MAX", modelImage:"image2.5", region:REGIONS[1], ratio:"16:9", reso:"720P", query:"", panLink:"", panCode:"", panLoading:false },
   project:{ title:"重生之不再爱了", style:"real", modelVideo:MODELS_VIDEO[0], modelImage:MODELS_IMAGE[0], ratio:"16:9", reso:"720P", region:REGIONS[1] },
   stage:"clips",                          // clips | script | asset | shot | film
   assetTab:"character",                   // character | scene | prop

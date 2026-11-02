@@ -89,21 +89,25 @@ function renderLanding(){
         的创作之路</h1>
       <div class="entry-card">
         <div class="entry-body">
+          ${isRestyle?`<div class="upload-source">
+            <button class="us-opt ${L.videoSource==='pan'?'':'on'}" data-src="local">本地上传</button>
+            <button class="us-opt ${L.videoSource==='pan'?'on':''}" data-src="pan">百度网盘上传</button>
+          </div>`:''}
+          ${isRestyle && L.videoSource==='pan'?`
+          <div class="pan-import">
+            <div class="pan-row">
+              <span class="pan-ico">☁</span>
+              <input class="pan-link" id="panLink" value="${esc(L.panLink)}" placeholder="粘贴百度网盘文件夹链接（链接里带提取码会自动识别）">
+              <input class="pan-code" id="panCode" maxlength="8" value="${esc(L.panCode)}" placeholder="提取码（选填）">
+              <button class="pan-btn" id="panImport" ${L.panLoading?'disabled':''}>${L.panLoading?'正在拉取视频…':'从网盘导入视频'}</button>
+            </div>
+            <div class="pan-hint">提取码选填；Agent 会自动拉取该文件夹内的全部视频文件，并加入「原片管理」</div>
+          </div>`:`
           <div class="dropzone" id="drop">
             <div class="dz-ico">${ICON.upload}</div>
             <div class="dz-title">${isRestyle?'上传视频':'上传剧本'}</div>
             <div class="dz-sub">${isRestyle?'支持上传 mp4 格式，单个大小不超过 100M，最多上传 100 个视频':'支持上传 txt / docx / pdf 文件'}</div>
-          </div>
-          ${isRestyle?`
-          <div class="pan-import">
-            <div class="pan-row">
-              <span class="pan-ico">☁</span>
-              <input class="pan-link" id="panLink" value="${esc(L.panLink)}" placeholder="粘贴百度网盘文件夹链接（链接里带提取码也可）">
-              <input class="pan-code" id="panCode" maxlength="8" value="${esc(L.panCode)}" placeholder="提取码">
-              <button class="pan-btn" id="panImport" ${L.panLoading?'disabled':''}>${L.panLoading?'正在拉取视频…':'从网盘导入视频'}</button>
-            </div>
-            <div class="pan-hint">Agent 会自动拉取该文件夹内的全部视频文件，并加入「原片管理」</div>
-          </div>`:''}
+          </div>`}
           <textarea class="q-input" id="q" placeholder="输入你的改编想法…">${esc(L.query)}</textarea>
           ${isFilm?'':`<div class="entry-toolbar">
             <div class="tool" id="tStyle"><span class="ti">${ICON.wand}</span>${styleName(L.style)}<span class="chev">⌄</span></div>
@@ -140,8 +144,13 @@ function bindLanding(){
       else openMenu(anchor, RATIOS, v=>{ L.ratio=v; renderLanding(); });
     };
   }
+  $$('.upload-source .us-opt').forEach(b=> b.onclick=()=>{
+    L.videoSource = b.dataset.src;
+    renderLanding();
+  });
   $('#q').oninput = e=> L.query = e.target.value;
-  $('#drop').onclick = startProject;
+  const drop = $('#drop');
+  if(drop) drop.onclick = startProject;
   const go = $('#go');
   if(go) go.onclick = startProject;
   const panBtn = $('#panImport');
@@ -215,7 +224,6 @@ function importFromPan(){
   const link = (L.panLink||'').trim();
   if(!link){ toast('请先粘贴百度网盘文件夹链接'); return; }
   if(!/(?:pan|yun)\.baidu\.com\//i.test(link)){ toast('请粘贴有效的百度网盘链接'); return; }
-  if(!(L.panCode||'').trim()){ toast('请输入提取码'); return; }
   L.panLoading = true;
   renderLanding();
   /* Demo 环境为模拟拉取，不真实访问网盘 */
