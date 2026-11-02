@@ -110,7 +110,7 @@ function renderLanding(){
           <div class="entry-toolbar">
             <div class="tool" id="tStyle"><span class="ti">${ICON.wand}</span>${styleName(L.style)}<span class="chev">⌄</span></div>
             <div class="tool" id="tRegion"><span class="ti">${ICON.wand}</span>${esc(L.region)}<span class="chev">⌄</span></div>
-            <div class="tool" id="tRatio"><span class="ti">${ICON.monitor}</span><span data-r="ratio">${L.ratio}</span><i class="tsep">|</i><span data-r="reso">${L.reso}</span><span class="chev">⌄</span></div>
+            <div class="tool" id="tRatio"><span class="ti">${ICON.monitor}</span><span class="sub" data-r="ratio" title="选择画幅比例">${L.ratio}<span class="chev">⌄</span></span><i class="tsep">|</i><span class="sub" data-r="reso" title="选择分辨率">${L.reso}<span class="chev">⌄</span></span></div>
             <button class="send-btn" id="go">${ICON.send}</button>
           </div>
         </div>
@@ -131,8 +131,9 @@ function bindLanding(){
   $('#tRegion').onclick= e=> openMenu(e.currentTarget, REGIONS, v=>{ L.region=v; renderLanding(); });
   $('#tRatio').onclick = e=>{
     const t = e.target.closest('[data-r]');
-    if(t && t.dataset.r==='reso') openMenu(e.currentTarget, RESOS, v=>{ L.reso=v; renderLanding(); });
-    else openMenu(e.currentTarget, RATIOS, v=>{ L.ratio=v; renderLanding(); });
+    const anchor = t || e.currentTarget;
+    if(t && t.dataset.r==='reso') openMenu(anchor, RESOS, v=>{ L.reso=v; renderLanding(); });
+    else openMenu(anchor, RATIOS, v=>{ L.ratio=v; renderLanding(); });
   };
   $('#q').oninput = e=> L.query = e.target.value;
   $('#drop').onclick = startProject;
