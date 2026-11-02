@@ -81,7 +81,8 @@ function renderLanding(){
       <div class="hero-deco clap">${ICON.clap}</div>
       <h1 class="hero-title">让 Agent 开启你
         <span class="seg hero-seg">
-          <button data-t="film"   class="${L.toggle==='film'?'on':''}">成片</button>
+          <button data-t="film" class="${L.toggle==='film'?'on':''}">成片</button>
+          <button data-t="restyle" class="${L.toggle==='restyle'?'on':''}">转绘</button>
           <button data-t="script" class="${L.toggle==='script'?'on':''}">剧本</button>
         </span>
         的创作之路</h1>
@@ -396,7 +397,10 @@ function clipsHTML(){
     const img = drawScene(c.scene, 'orig');
     return `<div class="clipc" draggable="true" data-i="${i}">
       <div class="clip-thumb"><img src="${img}" alt="">${c.from==='pan'?'<span class="clip-src">☁ 网盘</span>':''}<span class="clip-play">▶</span><span class="clip-dur">${c.dur}</span></div>
-      <div class="clip-meta"><span title="${esc(c.name)}">${esc(c.name)}</span><button class="clip-del" data-i="${i}">✕</button></div>
+      <div class="clip-meta">
+        <div class="clip-label"><b>第 ${i+1} 集</b><span class="clip-name" title="${esc(c.name)}">${esc(c.name)}</span></div>
+        <button class="clip-del" data-i="${i}">✕</button>
+      </div>
     </div>`;
   }).join('');
   return `<div class="mgr">
@@ -412,18 +416,20 @@ function bindClips(){
   let dragI = null;
   $$('#clipGrid .clipc').forEach(el=>{
     el.querySelector('.clip-thumb').onclick = ()=> playClip(+el.dataset.i);
-    el.ondragstart = ()=> dragI = +el.dataset.i;
+    el.ondragstart = ()=>{ dragI = +el.dataset.i; el.classList.add('dragging'); };
+    el.ondragend   = ()=> el.classList.remove('dragging');
     el.ondragover  = e=> e.preventDefault();
     el.ondrop = e=>{ e.preventDefault(); const to=+el.dataset.i;
       if(dragI===null||dragI===to) return;
       const [m]=state.clips.splice(dragI,1); state.clips.splice(to,0,m); dragI=null; renderBody();
+      toast(`已调整为第 ${to+1} 集`);
     };
   });
   $$('#clipGrid .clip-del').forEach(b=> b.onclick=e=>{ e.stopPropagation();
     state.clips.splice(+b.dataset.i,1); renderBody(); toast('已删除'); });
   $('#addClip').onclick = ()=>{
     const n = state.clips.length+1;
-    state.clips.push({ id:'c'+Date.now(), name:'第'+['一','二','三','四','五','六','七','八','九','十'][n-1]+'集', dur:'00:05', scene:SC.bedroom });
+    state.clips.push({ id:'c'+Date.now(), name:`EP${String(n).padStart(2,'0')}_新上传原片.mp4`, dur:'00:05', scene:SC.bedroom });
     renderBody(); toast('已上传第'+n+'集');
   };
 }
@@ -645,7 +651,14 @@ function bindScript(){
   sc.addEventListener('wheel', unlock, {passive:true});
   sc.addEventListener('touchstart', unlock, {passive:true});
 
-  $('#dlBook').onclick = ()=> downloadScript(false);
+  $('#dlBook').onclick = e=>{
+    const lang = regionLang(state.project.region);
+    const src = state.scriptSource || { demo:true };
+    if(!src.demo || lang==='zh'){ downloadScript(false,'target'); return; }
+    const L = SCRIPT_LANGS[lang];
+    openMenu(e.currentTarget, [`中文 + ${L.name}（非台词中文）`, `纯${L.name}剧本`], (_,i)=>
+      downloadScript(false, i===0 ? 'mixed' : 'target'));
+  };
   $('#uploadScript').onclick = ()=> $('#scriptFile').click();
   $('#scriptFile').onchange = e=>{
     const f = e.target.files && e.target.files[0];
@@ -662,17 +675,42 @@ function bindScript(){
   };
   spy();
 }
-function downloadScript(one){
+function downloadScript(one, mode){
   const lang = regionLang(state.project.region);
   const L = SCRIPT_LANGS[lang];
   const isZh = lang === 'zh';
+  const pure = mode === 'target' && !isZh;   // 纯目标语言：非台词也使用目标语言
   const src = state.scriptSource || { demo:true };
   const eps = one ? [state.epScripts[state.scriptEp]] : state.epScripts;
   const rule = '='.repeat(44);
   const body = eps.map(ep=>{
     if(ep.raw) return `第 ${ep.no} 集　${ep.title}\n${'-'.repeat(36)}\n\n${ep.raw}`;
+    if(pure){
+      const pad2 = n=> String(n).padStart(2,'0');
+      const epTag = {
+        en: `EP ${pad2(ep.no)}`, ja: `第 ${pad2(ep.no)} 話`,
+        ko: `제 ${pad2(ep.no)} 화`, es: `EP ${pad2(ep.no)}`,
+      }[lang];
+      const scTag = i => ({
+        en: `SC ${pad2(i+1)}`, ja: `第 ${pad2(i+1)} 場`,
+        ko: `제 ${pad2(i+1)} 장`, es: `ESC ${pad2(i+1)}`,
+      })[lang];
+      const sep = lang === 'ja' ? '：' : ': ';
+      const headLine = `${epTag}　${epTitleI18n(ep, lang)}`;
+      const scenes = ep.scenes.map((sc,i)=>[
+        `${scTag(i)}　${sc.head[lang]}`,
+        '',
+        sc.action[lang],
+        '',
+        sc.lines.map(l=>{
+          const c = SCRIPT_CAST[l.who];
+          return `${c[lang]}${sep}${l.t[lang]}`;
+        }).join('\n\n'),
+      ].join('\n')).join('\n\n');
+      return `${headLine}\n${'-'.repeat(36)}\n\n${scenes}`;
+    }
     const headLine = `第 ${ep.no} 集　${ep.title}`;
-    /* 与页面一致：非台词中文，台词使用目标语言 */
+    /* 混合格式：非台词中文，台词使用目标语言 */
     const scenes = ep.scenes.map((sc,i)=>[
       `第 ${i+1} 场　${sc.head.zh}`,
       '',
@@ -687,20 +725,52 @@ function downloadScript(one){
     return `${headLine}\n${'-'.repeat(36)}\n\n${scenes}`;
   }).join('\n\n\n');
   const scriptLabel = src.demo
-    ? `剧本（台词 ${L.name} · 非台词中文）`
+    ? (pure ? ({
+        en: `SCREENPLAY · ${L.name}`,
+        ja: `脚本 · ${L.name}`,
+        ko: `시나리오 · ${L.name}`,
+        es: `GUION · ${L.name}`,
+      })[lang]
+            : isZh ? '剧本（中文 · 原生稿）'
+                   : `剧本（台词 ${L.name} · 非台词中文）`)
     : `剧本原文（上传稿：${src.name}）`;
-  const meta = `${state.project.title}　${scriptLabel}\n目标地区：${regionLabel(state.project.region)}　|　共 ${eps.length} 集　|　${new Date().toLocaleDateString('zh-CN')}\n${rule}\n\n`;
-  const text = meta + body + `\n\n${rule}\n百度一镜 · 短剧转绘 Agent 生成`;
+  const dispTitle = pure ? projectTitleI18n(state.project.title, lang) : state.project.title;
+  const dateLoc = pure ? ({ en:'en-US', ja:'ja-JP', ko:'ko-KR', es:'es-ES' }[lang] || 'zh-CN') : 'zh-CN';
+  const dateStr = new Date().toLocaleDateString(dateLoc);
+  let metaLine, footer;
+  if(pure){
+    const region = regionI18n(state.project.region, lang);
+    const n = eps.length;
+    metaLine = {
+      en: `TARGET REGION: ${region}  |  ${n} EPISODES  |  ${dateStr}`,
+      ja: `対象地域：${region}　|　全 ${n} 話　|　${dateStr}`,
+      ko: `타깃 지역: ${region}  |  총 ${n}화  |  ${dateStr}`,
+      es: `REGIÓN OBJETIVO: ${region}  |  ${n} EPISODIOS  |  ${dateStr}`,
+    }[lang];
+    footer = {
+      en: 'Generated by Baidu Yijing · Short Drama Restyle Agent',
+      ja: 'Baidu Yijing · ショートドラマ転写エージェント 生成',
+      ko: 'Baidu Yijing · 숏드라마 리스타일 에이전트 생성',
+      es: 'Generado por Baidu Yijing · Agente de Restilización de Series Cortas',
+    }[lang];
+  }else{
+    metaLine = `目标地区：${regionLabel(state.project.region)}　|　共 ${eps.length} 集　|　${dateStr}`;
+    footer = '百度一镜 · 短剧转绘 Agent 生成';
+  }
+  const meta = `${dispTitle}　${scriptLabel}\n${metaLine}\n${rule}\n\n`;
+  const text = meta + body + `\n\n${rule}\n${footer}`;
   const blob = new Blob(['\ufeff' + text], {type:'text/plain;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = src.demo
-    ? (isZh ? `${state.project.title}_中文剧本.txt` : `${state.project.title}_${L.name}台词_中文调度_剧本.txt`)
+    ? (pure ? `${dispTitle}_${L.name}_剧本.txt`
+            : isZh ? `${state.project.title}_中文剧本.txt`
+                   : `${state.project.title}_${L.name}台词_中文调度_剧本.txt`)
     : `${state.project.title}_上传稿_剧本.txt`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=> URL.revokeObjectURL(url), 1000);
-  const kind = isZh ? '中文' : `${L.name}台词·中文调度`;
+  const kind = src.demo ? (pure ? `纯${L.name}` : isZh ? '中文' : `${L.name}台词·中文调度`) : '上传稿';
   toast(one ? `已下载第 ${eps[0].no} 集${kind}剧本` : `已下载整本${kind}剧本（${eps.length} 集）`);
 }
 /* ===================== 右侧工作面板 ===================== */
@@ -919,8 +989,106 @@ function openCompare(id, lookId){
     <div class="player-foot">${kind} · ${styleName(state.project.style)} · 左右为转绘前后完整对比</div>
   </div>`);
 }
-/* ---- 资产表导出 ---- */
-function assetTableHTML(imageMap){
+/* ---- 资产表导出（Excel） ---- */
+const XLSX_CRC_TABLE = (()=>{
+  const t = new Uint32Array(256);
+  for(let n=0;n<256;n++){
+    let c = n;
+    for(let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function xlsxCrc32(u8){
+  let c = 0xFFFFFFFF;
+  for(let i=0;i<u8.length;i++) c = XLSX_CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+/* 纯前端生成 .xlsx：ZIP(store) + OOXML，无需第三方库 */
+function xlsxZip(files){
+  const enc = new TextEncoder();
+  const chunks = [], central = [];
+  let offset = 0;
+  const d = new Date();
+  const dosTime = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
+  const dosDate = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+  files.forEach(([name, content])=>{
+    const nameU8 = enc.encode(name);
+    const dataU8 = enc.encode(content);
+    const crc = xlsxCrc32(dataU8);
+    const lh = new Uint8Array(30 + nameU8.length);
+    const lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0x0800, true);      // UTF-8 文件名
+    lv.setUint16(8, 0, true);           // store
+    lv.setUint16(10, dosTime, true);
+    lv.setUint16(12, dosDate, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, dataU8.length, true);
+    lv.setUint32(22, dataU8.length, true);
+    lv.setUint16(26, nameU8.length, true);
+    lv.setUint16(28, 0, true);
+    lh.set(nameU8, 30);
+    chunks.push(lh, dataU8);
+
+    const ch = new Uint8Array(46 + nameU8.length);
+    const cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0x0800, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, dosTime, true);
+    cv.setUint16(14, dosDate, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, dataU8.length, true);
+    cv.setUint32(24, dataU8.length, true);
+    cv.setUint16(28, nameU8.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    ch.set(nameU8, 46);
+    central.push(ch);
+    offset += lh.length + dataU8.length;
+  });
+  const cdSize = central.reduce((n,c)=> n + c.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  return [...chunks, ...central, end];
+}
+function xlsxEsc(v){
+  return String(v==null?'':v)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+function xlsxCol(n){
+  let s = '';
+  for(n++; n>0; n = Math.floor((n-1)/26)) s = String.fromCharCode(65 + ((n-1)%26)) + s;
+  return s;
+}
+function xlsxSheet(rows, widths){
+  const cols = widths && widths.length
+    ? `<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
+    : '';
+  const body = rows.map((row,ri)=>`<row r="${ri+1}">${row.map((cell,ci)=>{
+    const ref = xlsxCol(ci) + (ri+1);
+    const style = ri === 0 ? 1 : 2;
+    if(cell === null || cell === undefined || cell === '') return `<c r="${ref}" s="${style}"/>`;
+    return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(cell)}</t></is></c>`;
+  }).join('')}</row>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${body}</sheetData></worksheet>`;
+}
+function buildAssetXlsx(){
   const p = state.project;
   const lang = regionLang(p.region);
   const charList = state.assets.character;
@@ -928,126 +1096,82 @@ function assetTableHTML(imageMap){
   const propList = state.assets.prop;
   const count = charList.length + sceneList.length + propList.length;
   const lookCount = charList.reduce((n,a)=> n + ((a.looks && a.looks.length) || 0), 0);
-  const pairOf = (item, cat, done, keyBase)=> done
-    ? `<div class="pair">
-         <figure><img src="${esc((imageMap && imageMap[keyBase+'-before']) || assetImage(item,cat,'orig'))}" alt=""><figcaption>转绘前</figcaption></figure>
-         <figure><img src="${esc((imageMap && imageMap[keyBase+'-after']) || assetImage(item,cat,'new'))}" alt=""><figcaption>转绘后</figcaption></figure>
-       </div>`
-    : '<span class="pending">待生成</span>';
+  const today = new Date().toLocaleString('zh-CN', {hour12:false});
   const locName = a=>{
     for(const k in SCRIPT_CAST){
       if(SCRIPT_CAST[k].zh === a.name) return SCRIPT_CAST[k][lang] || a.name;
     }
     return a.name;
   };
-  const charRows = charList.map(a=>{
-    const looks = (a.looks && a.looks.length) ? a.looks : [{ id:a.id, name:'默认造型', prompt:a.prompt, scene:a.scene }];
+
+  const infoRows = [
+    ['项目信息', '内容'],
+    ['项目名称', p.title],
+    ['目标地区', regionLabel(p.region)],
+    ['画风', styleName(p.style)],
+    ['画幅', p.ratio],
+    ['清晰度', p.reso],
+    ['资产总数', `${count} 项`],
+    ['角色妆造', `${lookCount} 套`],
+    ['导出时间', today],
+    ['导出方', '百度一镜 · 短剧转绘 Agent'],
+    ['说明', '本表为资产清单；转绘前后对比图请在「资产确认」页查看。'],
+  ];
+
+  const charRows = [['转绘后角色名', '原始角色名', '角色身份', '妆造名', '转绘提示词', '状态']];
+  charList.forEach(a=>{
+    const looks = (a.looks && a.looks.length) ? a.looks : [{ id:a.id, name:'默认造型', prompt:a.prompt }];
     const hasLooks = !!(a.looks && a.looks.length);
-    const loc = locName(a);
-    const sub = loc !== a.name
-      ? `${esc(a.name)}${a.role ? ' · ' + esc(a.role) : ''}`
-      : (a.role ? esc(a.role) : '');
-    const nameCell = `<td rowspan="${looks.length}" class="role-cell"><b>${esc(loc)}</b>${sub?`<div class="cell-sub">${sub}</div>`:''}</td>`;
-    return looks.map((lk,i)=>{
+    looks.forEach(lk=>{
       const done = a.pre || state.assetDone[a.id] || (hasLooks && state.lookDone[lk.id]);
-      const keyBase = `character_${a.id}_${lk.id}`;
-      return `<tr>${i===0 ? nameCell : ''}
-        <td><b>${esc(lk.name)}</b><div class="cell-sub">妆造 ${i+1}</div></td>
-        <td class="prompt">${esc(lk.prompt)}</td>
-        <td>${pairOf(lk,'character',done,keyBase)}</td>
-        <td>${done?'已生成':'待生成'}</td>
-      </tr>`;
-    }).join('');
-  }).join('');
-  const simpleRows = (list, cat)=> list.map(a=>{
-    const done = a.pre || state.assetDone[a.id];
-    const keyBase = `${cat}_${a.id}`;
-    return `<tr>
-      <td><b>${esc(a.name)}</b></td>
-      <td class="prompt">${esc(a.prompt)}</td>
-      <td>${pairOf(a,cat,done,keyBase)}</td>
-      <td>${done?'已生成':'待生成'}</td>
-    </tr>`;
-  }).join('');
-  const sceneRows = simpleRows(sceneList, 'scene');
-  const propRows = simpleRows(propList, 'prop');
-  const today = new Date().toLocaleString('zh-CN', {hour12:false});
-  const html = `<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>${esc(p.title)} · 转绘资产表</title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;padding:32px;background:#f5f6fa;color:#1b1d24;font:14px/1.6 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-.wrap{max-width:1200px;margin:0 auto;background:#fff;border-radius:16px;padding:32px 36px;box-shadow:0 6px 24px rgba(30,34,70,.08)}
-h1{margin:0 0 6px;font-size:22px}
-.meta{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 22px}
-.meta span{font-size:12px;color:#5a5f6c;background:#f5f6fa;padding:4px 10px;border-radius:7px}
-h2{margin:28px 0 10px;font-size:16px;display:flex;align-items:baseline;gap:8px}
-h2:first-of-type{margin-top:4px}
-h2 .cnt{font-size:12px;color:#9aa0ae;font-weight:400}
-table{width:100%;border-collapse:collapse;table-layout:fixed}
-th,td{border:1px solid #e9ebf1;padding:10px 12px;text-align:left;vertical-align:top;font-size:13px}
-th{background:#f5f6fa;color:#5a5f6c;font-weight:600}
-.t-char th:nth-child(1){width:172px}
-.t-char th:nth-child(2){width:116px}
-.t-char th:nth-child(3){width:30%}
-.t-char th:nth-child(4){width:300px}
-.t-char th:nth-child(5){width:78px}
-.t-scene th:nth-child(1),.t-prop th:nth-child(1){width:130px}
-.t-scene th:nth-child(2),.t-prop th:nth-child(2){width:34%}
-.t-scene th:nth-child(3),.t-prop th:nth-child(3){width:300px}
-.t-scene th:nth-child(4),.t-prop th:nth-child(4){width:78px}
-.role-cell b{font-size:14px}
-.prompt{color:#5a5f6c;line-height:1.7}
-.pair{display:flex;gap:8px}
-figure{margin:0;flex:1;min-width:0;text-align:center}
-figure img{width:100%;border-radius:8px;display:block;background:#f0f2f7}
-figcaption{font-size:11px;color:#9aa0ae;margin-top:4px}
-.pending{color:#b9bdc9}
-.cell-sub{font-size:11px;color:#9aa0ae;margin-top:2px}
-.foot{margin-top:24px;color:#b9bdc9;font-size:12px;text-align:right}
-@media print{body{background:#fff;padding:0}.wrap{box-shadow:none;border-radius:0;padding:0}}
-</style></head>
-<body><div class="wrap">
-  <h1>${esc(p.title)} · 转绘资产表</h1>
-  <div class="meta">
-    <span>目标地区：${esc(regionLabel(p.region))}</span>
-    <span>画风：${esc(styleName(p.style))}</span>
-    <span>画幅：${esc(p.ratio)}</span>
-    <span>清晰度：${esc(p.reso)}</span>
-    <span>资产数：${count}</span>
-    <span>角色妆造：${lookCount} 套</span>
-    <span>导出时间：${today}</span>
-  </div>
-  <h2>角色资产 <span class="cnt">${charList.length} 个角色 · ${lookCount} 套妆造</span></h2>
-  <table class="t-char">
-    <thead><tr><th>转绘后角色名</th><th>妆造名</th><th>转绘提示词</th><th>转绘前后对比</th><th>状态</th></tr></thead>
-    <tbody>${charRows}</tbody>
-  </table>
-  <h2>场景资产 <span class="cnt">${sceneList.length} 个场景</span></h2>
-  <table class="t-scene">
-    <thead><tr><th>场景名</th><th>转绘提示词</th><th>转绘前后对比</th><th>状态</th></tr></thead>
-    <tbody>${sceneRows}</tbody>
-  </table>
-  <h2>道具资产 <span class="cnt">${propList.length} 个道具</span></h2>
-  <table class="t-prop">
-    <thead><tr><th>道具名</th><th>转绘提示词</th><th>转绘前后对比</th><th>状态</th></tr></thead>
-    <tbody>${propRows}</tbody>
-  </table>
-  <div class="foot">由百度一镜 · 短剧转绘 Agent 导出</div>
-</div></body></html>`;
-  return {html, count, lookCount};
+      charRows.push([locName(a), a.name, a.role || '', lk.name, lk.prompt, done ? '已生成' : '待生成']);
+    });
+  });
+  const simpleRows = (list, label)=>[
+    [label, '转绘提示词', '状态'],
+    ...list.map(a=>{
+      const done = a.pre || state.assetDone[a.id];
+      return [a.name, a.prompt, done ? '已生成' : '待生成'];
+    }),
+  ];
+  const sceneRows = simpleRows(sceneList, '场景名');
+  const propRows = simpleRows(propList, '道具名');
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
+  const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="项目信息" sheetId="1" r:id="rId1"/><sheet name="角色资产" sheetId="2" r:id="rId2"/><sheet name="场景资产" sheetId="3" r:id="rId3"/><sheet name="道具资产" sheetId="4" r:id="rId4"/></sheets></workbook>`;
+  const wbRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F4F8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFDCE1EA"/></left><right style="thin"><color rgb="FFDCE1EA"/></right><top style="thin"><color rgb="FFDCE1EA"/></top><bottom style="thin"><color rgb="FFDCE1EA"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+
+  const files = [
+    ['[Content_Types].xml', contentTypes],
+    ['_rels/.rels', rootRels],
+    ['xl/workbook.xml', workbook],
+    ['xl/_rels/workbook.xml.rels', wbRels],
+    ['xl/styles.xml', styles],
+    ['xl/worksheets/sheet1.xml', xlsxSheet(infoRows, [18, 56])],
+    ['xl/worksheets/sheet2.xml', xlsxSheet(charRows, [20, 16, 16, 18, 60, 10])],
+    ['xl/worksheets/sheet3.xml', xlsxSheet(sceneRows, [22, 64, 10])],
+    ['xl/worksheets/sheet4.xml', xlsxSheet(propRows, [22, 64, 10])],
+  ];
+  const blob = new Blob(xlsxZip(files), {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  return { blob, count, lookCount };
 }
 function exportAssetTable(){
-  const {html, count, lookCount} = assetTableHTML();
   const p = state.project;
-  const blob = new Blob(['\ufeff' + html], {type:'text/html;charset=utf-8'});
+  const { blob, count, lookCount } = buildAssetXlsx();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${p.title}_转绘资产表.html`;
+  a.download = `${p.title}_转绘资产表.xlsx`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=> URL.revokeObjectURL(url), 1000);
-  toast(`已导出资产表（${count} 项资产 · ${lookCount} 套妆造）`);
+  toast(`已导出 Excel 资产表（${count} 项资产 · ${lookCount} 套妆造）`);
 }
 /* ---- 参考图上传 / 放大查看 ---- */
 function pickRefImages(cb){
@@ -1191,18 +1315,6 @@ function shotHTML(){
       <div class="filmstrip" id="strip">${strip}</div>
     </div>
     <div class="sb-split">
-      <section class="sb-pane sb-prompt">
-        <div class="sb-pane-head">
-          <b>分镜提示词</b>
-          <span class="sb-pane-sub">分镜 ${state.activeShot+1}/${state.shots.length}</span>
-        </div>
-        <div class="sb-prompt-box">
-          <div class="sb-desc">${segHTML(sh.seg)}</div>
-          <div class="sb-prompt-foot">
-            <button class="aprimary" id="genShot">开始转绘</button>
-          </div>
-        </div>
-      </section>
       <section class="sb-pane sb-video">
         <div class="sb-pane-head">
           <b>分镜视频</b>
@@ -1213,6 +1325,18 @@ function shotHTML(){
           <span>时长 ${sh.dur}</span>
           <span>${esc(styleName(state.project.style))}</span>
           <span>${esc(state.project.ratio)} · ${esc(state.project.reso)}</span>
+        </div>
+      </section>
+      <section class="sb-pane sb-prompt">
+        <div class="sb-pane-head">
+          <b>分镜提示词</b>
+          <span class="sb-pane-sub">分镜 ${state.activeShot+1}/${state.shots.length}</span>
+        </div>
+        <div class="sb-prompt-box">
+          <div class="sb-desc">${segHTML(sh.seg)}</div>
+          <div class="sb-prompt-foot">
+            <button class="aprimary" id="genShot">开始转绘</button>
+          </div>
         </div>
       </section>
     </div>`;
