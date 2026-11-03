@@ -244,19 +244,12 @@ const STAGES = [
 ];
 function renderProject(){
   const p = state.project;
-  const chip = (id,txt)=>`<div class="tb-ctrl" id="${id}">${txt}</div>`;
   $('#main').innerHTML = `
   <div class="proj">
     <div class="topbar">
       <div class="tb-left">
         <button class="tb-back" id="back">‹</button>
         <input class="tb-title" id="title" value="${esc(p.title)}">
-      </div>
-      <div class="tb-mid">
-        ${chip('cStyle','🎨 '+styleName(p.style))}
-        ${chip('cRegion','🌍 '+regionLabel(p.region))}
-        ${chip('cRatio','▭ '+p.ratio)}
-        ${chip('cReso','✦ '+p.reso)}
       </div>
       <div class="tb-right">
         <button class="tb-ghost">★ 我的订阅</button>
@@ -277,10 +270,6 @@ function bindTopbar(){
   const p = state.project;
   $('#back').onclick = ()=>{ state.screen='landing'; render(); };
   $('#title').onchange = e=> p.title = e.target.value || p.title;
-  $('#cStyle').onclick = e=> openMenu(e.currentTarget, STYLES.map(s=>s.name), (_,i)=>{ p.style=STYLES[i].key; render(); });
-  $('#cRegion').onclick= e=> openMenu(e.currentTarget, REGIONS, v=>{ p.region=v; render(); });
-  $('#cRatio').onclick = e=> openMenu(e.currentTarget, RATIOS, v=>{ p.ratio=v; render(); });
-  $('#cReso').onclick  = e=> openMenu(e.currentTarget, RESOS,  v=>{ p.reso=v; render(); });
   $('#assetBtn').onclick = ()=>{ state.stage='asset'; render(); };
   const expShots = $('#exportShots'); if(expShots) expShots.onclick = openExportDialog;
   $('#exportAll').onclick= ()=>{ state.stage='film'; render(); };
