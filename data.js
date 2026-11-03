@@ -68,32 +68,45 @@ function sceneBG(kind, c){
       <polygon points="170,150 280,80 400,150" fill="${mix(c.hill,'#000',.18)}"/>`;
   }
 }
-function character(c, outline){
+function character(c, outline, dx=0){
   const o = outline>0?`stroke="${mix(c.cloth,'#000',.55)}" stroke-width="${outline}"`:'';
   return `
-    <g ${o}>
+    <g ${o} transform="translate(${dx} 0)">
       <rect x="168" y="150" width="64" height="70" rx="20" fill="${c.cloth}"/>
       <path d="M176 118 q24 -34 48 0 l6 36 q-30 14 -60 0 z" fill="${c.hair}"/>
       <circle cx="200" cy="128" r="22" fill="${c.skin}"/>
       <path d="M180 116 q20 -20 40 0 q-4 -18 -20 -18 q-16 0 -20 18z" fill="${c.hair}"/>
     </g>`;
 }
-function drawScene(c, mode, styleKey){
-  const col = mode === 'new' ? restyle(c, styleKey) : c;
+/* 生成版本差异化：轻微调色 / 太阳与角色位移，保证多次生成可区分 */
+function versionColor(c, variant){
+  if(!variant) return c;
+  const tint = ['#ffd8c8','#c9e4ff','#d8f3d2','#ead7ff'][(variant-1)%4];
+  const amount = 0.07 + (variant%3)*0.015;
+  const out = {...c};
+  ['sky1','sky2','hill','ground','sun','hair','cloth'].forEach(k=> out[k]=mix(c[k], tint, amount));
+  out.skin = mix(c.skin, '#ffe7d8', 0.04);
+  return out;
+}
+function drawScene(c, mode, styleKey, variant=0){
+  let col = mode === 'new' ? restyle(c, styleKey) : c;
+  if(mode === 'new' && variant) col = versionColor(col, variant);
   const fx = STYLE_FX[styleKey] || STYLE_FX.anime;
   const blur = (mode==='new' && fx.soft) ? `<filter id="b"><feGaussianBlur stdDeviation="${fx.soft}"/></filter>` : '';
   const grp  = (mode==='new' && fx.soft) ? 'filter="url(#b)"' : '';
   const outline = mode==='new' ? fx.outline : 0;
+  const dx = (mode==='new' && variant) ? ((variant%3)-1)*9 : 0;
+  const sunX = 320 + dx * 0.7;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice">
     <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${col.sky1}"/><stop offset="1" stop-color="${col.sky2}"/>
     </linearGradient>${blur}</defs>
     <g ${grp}>
     <rect width="400" height="240" fill="url(#s)"/>
-    <circle cx="320" cy="56" r="26" fill="${col.sun}" opacity=".85"/>
+    <circle cx="${sunX}" cy="56" r="26" fill="${col.sun}" opacity=".85"/>
     ${sceneBG(col.kind, col)}
     <rect y="200" width="400" height="40" fill="${col.ground}"/>
-    ${character(col, outline)}
+    ${character(col, outline, dx)}
     </g></svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
@@ -720,5 +733,8 @@ const state = {
   shotBatch: false,                       // 批量转绘选择模式
   shotSel: new Set(),                     // 批量转绘勾选的分镜下标
   selShots: new Set(),
+  historyShot: null,                      // 生成历史弹窗：分镜下标
+  historyPick: null,                      // 生成历史弹窗：暂选版本 id
+  filmCompare: false,                     // 合成成片：转绘前后对比视图
   generating: new Set(),                  // id -> 生成中
 };

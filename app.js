@@ -330,7 +330,7 @@ function libCardHTML(k, item){
   }
   if(k==='video'){
     return `<button class="alib-card" data-lib-cat="video" data-lib-idx="${item.i}" title="查看分镜 ${item.i+1}">
-      <span class="alib-cover"><img src="${drawScene(item.s.scene, 'new', state.project.style)}" alt="分镜 ${item.i+1}"><span class="alib-badge">${esc(item.s.dur)}</span></span>
+      <span class="alib-cover"><img src="${shotStill(item.s)}" alt="分镜 ${item.i+1}"><span class="alib-badge">${esc(item.s.dur)}</span></span>
       <span class="alib-name">分镜 ${String(item.i+1).padStart(2,'0')}</span>
     </button>`;
   }
@@ -434,7 +434,7 @@ function bindAssetLibrary(){
     if(cat==='video'){
       const i = +card.dataset.libIdx;
       const s = state.shots[i];
-      if(s) openImageZoom(drawScene(s.scene, 'new', state.project.style), `分镜 ${String(i+1).padStart(2,'0')}`);
+      if(s) openImageZoom(shotStill(s), `分镜 ${String(i+1).padStart(2,'0')}`);
       return;
     }
     state.assetLibDetail = {cat, id:card.dataset.libId};
@@ -482,14 +482,14 @@ function stageResultCard(k){
     sub = `角色 ${charN} · 场景 ${sceneN} · 道具 ${propN}`;
   }else if(k==='shot'){
     title = STAGE_LABEL.shot;
-    media = resStack(state.shots.slice(0,3).map(s=>drawScene(s.scene, s.done?'new':'orig', state.project.style)), `${shotDone}/${shotN}`);
+    media = resStack(state.shots.slice(0,3).map(s=>s.done ? shotStill(s) : drawScene(s.scene,'orig')), `${shotDone}/${shotN}`);
     sub = `共 ${shotN} 个分镜 · 已转绘 ${shotDone} 个`;
     const pct = shotN ? Math.round(shotDone / shotN * 100) : 0;
     prog = `<div class="res-prog"><i style="width:${pct}%"></i></div>`;
   }else{
     title = STAGE_LABEL.film;
     const cover = state.shots.find(s=>s.done) || state.shots[0];
-    media = `<div class="res-media res-poster"><img src="${drawScene(cover.scene,'new',state.project.style)}" alt=""><span class="res-play">▶</span><span class="cf-count">${shotDone}/${shotN}</span></div>`;
+    media = `<div class="res-media res-poster"><img src="${shotStill(cover)}" alt=""><span class="res-play">▶</span><span class="cf-count">${shotDone}/${shotN}</span></div>`;
     sub = shotDone === shotN ? '全部分镜已完成，可导出成片' : `待完成 ${shotN-shotDone} 个分镜后合成`;
   }
 
@@ -1286,6 +1286,49 @@ function bindAsset(){
 }
 
 /* ---- 分镜转绘 ---- */
+const SEED_VERSION_COUNT = { sh1:3, sh2:2, sh3:2, sh4:1, sh5:1 };
+function shotVersions(sh){
+  return (sh && Array.isArray(sh.versions)) ? sh.versions : [];
+}
+function versionFrame(sh, v){
+  return drawScene(sh.scene, 'new', state.project.style, v ? v.variant : 0);
+}
+function activeShotVersion(sh){
+  const list = shotVersions(sh);
+  if(!list.length) return null;
+  return list.find(v=>v.id===sh.activeVersion) || list[list.length-1];
+}
+function shotStill(sh){
+  if(!sh || !sh.done) return shotPlaceholderSVG();
+  const v = activeShotVersion(sh);
+  return v ? versionFrame(sh, v) : drawScene(sh.scene, 'new', state.project.style);
+}
+function nowStamp(){
+  const d = new Date();
+  return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function makeShotVersion(sh, idx){
+  const v = idx + 1;
+  const mm = String(8 + Math.floor(idx/3)).padStart(2,'0');
+  const ss = String((idx*17 + 9) % 60).padStart(2,'0');
+  return {
+    id:`${sh.id}_v${v}`, v, variant:idx,
+    time:`11-03 20:${mm}:${ss}`,
+    dur:sh.dur, model:state.project.modelVideo, reso:state.project.reso,
+  };
+}
+function ensureShotVersions(){
+  state.shots.forEach(sh=>{
+    if(!Array.isArray(sh.versions)) sh.versions = [];
+    if(sh.done && !sh.versions.length){
+      const n = SEED_VERSION_COUNT[sh.id] || 1;
+      for(let k=0;k<n;k++) sh.versions.push(makeShotVersion(sh, k));
+    }
+    if(sh.versions.length && !sh.versions.some(v=>v.id===sh.activeVersion)){
+      sh.activeVersion = sh.versions[sh.versions.length-1].id;
+    }
+  });
+}
 function segHTML(seg){
   return seg.map(s=> s.t ? esc(s.t)
     : `<span class="ref ref-${s.ref[0]}">@${esc(s.ref[1])}</span>`).join('');
@@ -1295,19 +1338,23 @@ function shotHTML(){
   const gen  = state.generating.has(sh.id);
   const status = gen ? '生成中' : sh.done ? '已转绘' : '待转绘';
   const beforeFrame = drawScene(sh.scene,'orig');
-  const afterFrame = sh.done ? drawScene(sh.scene,'new',state.project.style) : shotPlaceholderSVG();
+  const activeVer = activeShotVersion(sh);
+  const afterFrame = sh.done ? shotStill(sh) : shotPlaceholderSVG();
   const afterMain = gen
     ? `<div class="sb-view skeleton"><span class="spin"></span></div>`
     : sh.done
       ? `<div class="sb-view"><img src="${afterFrame}" alt="转绘后"></div>`
       : `<div class="sb-view"><img src="${afterFrame}" alt="待转绘占位图"></div>`;
+  const verTag = sh.done && activeVer
+    ? `<button type="button" class="sb-hist-link" data-shot-hist="${state.activeShot}" title="查看该分镜的生成历史">V${activeVer.v} · ${shotVersions(sh).length} 个版本</button>`
+    : '';
   const main = `<div class="sb-pair">
     <div class="sb-side">
       <div class="sb-side-head"><b>转绘前</b><span>原片</span></div>
       <div class="sb-player"><div class="sb-view"><img src="${beforeFrame}" alt="转绘前"></div></div>
     </div>
     <div class="sb-side">
-      <div class="sb-side-head"><b>转绘后</b></div>
+      <div class="sb-side-head"><b>转绘后</b>${verTag}</div>
       <div class="sb-player">${afterMain}</div>
     </div>
   </div>`;
@@ -1316,12 +1363,18 @@ function shotHTML(){
   const strip = state.shots.map((s,i)=>{
     const d = s.done; const g=state.generating.has(s.id);
     const sel = state.shotSel.has(i);
-    const img = d ? drawScene(s.scene,'new',state.project.style) : shotPlaceholderSVG();
+    const img = d ? shotStill(s) : shotPlaceholderSVG();
     const chk = state.shotBatch
       ? `<label class="shotc-chk" title="勾选后可批量转绘"><input type="checkbox" class="shchk" data-sel="${i}" ${sel?'checked':''}></label>`
       : '';
+    const ops = (d && !state.shotBatch)
+      ? `<span class="shotc-ops">
+           <button type="button" data-shot-down="${i}" title="下载该分镜视频">⬇</button>
+           <button type="button" data-shot-hist="${i}" title="查看生成历史（${shotVersions(s).length} 个版本）">◷</button>
+         </span>`
+      : '';
     return `<div class="shotc ${i===state.activeShot?'on':''} ${d?'done':'ph'} ${sel?'sel':''}" data-i="${i}">
-      <img src="${img}" alt="${d?'转绘后':'待转绘占位图'}">${g?'<span class="spin sm"></span>':''}${chk}
+      <img src="${img}" alt="${d?'转绘后':'待转绘占位图'}">${g?'<span class="spin sm"></span>':''}${chk}${ops}
       <span class="shotc-no">${i+1}</span>${d?'':'<span class="shotc-wait">待转绘</span>'}<span class="shotc-dur">${s.dur}</span>
     </div>`;
   }).join('');
@@ -1354,6 +1407,7 @@ function shotHTML(){
           <span>时长 ${sh.dur}</span>
           <span>${esc(styleName(state.project.style))}</span>
           <span>${esc(state.project.ratio)} · ${esc(state.project.reso)}</span>
+          ${activeVer?`<span>当前版本 V${activeVer.v}</span>`:''}
         </div>
       </section>
       <section class="sb-pane sb-prompt">
@@ -1373,7 +1427,158 @@ function shotHTML(){
 function genShot(i){
   const sh = state.shots[i]; if(!sh || state.generating.has(sh.id)) return;
   state.generating.add(sh.id); renderBody();
-  setTimeout(()=>{ state.generating.delete(sh.id); sh.done=true; renderBody(); toast('分镜已转绘'); }, 900);
+  setTimeout(()=>{
+    state.generating.delete(sh.id);
+    const list = shotVersions(sh);
+    const nv = makeShotVersion(sh, list.length);
+    nv.time = nowStamp();
+    list.push(nv);
+    sh.activeVersion = nv.id;
+    sh.done = true;
+    renderBody();
+    toast(`分镜已转绘 · 生成 V${nv.v}`);
+  }, 900);
+}
+function renderShotHistory(){
+  const i = state.historyShot;
+  const sh = state.shots[i];
+  if(!sh || !shotVersions(sh).length){ toast('该分镜暂无生成记录'); closeModal(); return; }
+  const active = activeShotVersion(sh);
+  const list = shotVersions(sh).slice().sort((a,b)=>b.v-a.v);
+  const cards = list.map(v=>`
+    <button type="button" class="hist-card ${v.id===state.historyPick?'on':''}" data-vid="${v.id}">
+      <span class="hist-thumb">
+        <img src="${versionFrame(sh, v)}" alt="版本 V${v.v}">
+        <span class="hist-v">V${v.v}</span>
+        ${v.id===active.id?'<span class="hist-using">使用中</span>':''}
+      </span>
+      <span class="hist-info">
+        <b>版本 V${v.v}</b>
+        <small>${esc(v.time)} · ${esc(v.dur)}</small>
+        <small>${esc(v.model)} · ${esc(v.reso)}</small>
+      </span>
+    </button>`).join('');
+  modal(`<div class="shot-hist">
+    <div class="player-head">
+      <div class="picker-title"><b>分镜 ${String(i+1).padStart(2,'0')} · 生成历史</b><span class="picker-sub">共 ${list.length} 个版本</span></div>
+      <button type="button" onclick="closeShotHistory()">✕</button>
+    </div>
+    <div class="hist-body">
+      <div class="hist-grid">${cards}</div>
+    </div>
+    <div class="hist-foot">
+      <span class="hist-hint">选择历史版本后，分镜预览与合成成片会同步更新</span>
+      <button class="aghost" type="button" onclick="closeShotHistory()">取消</button>
+      <button class="aprimary" type="button" id="histApply">使用所选版本</button>
+    </div>
+  </div>`);
+  bindShotHistory();
+}
+function bindShotHistory(){
+  const sh = state.shots[state.historyShot];
+  if(!sh) return;
+  const versions = shotVersions(sh);
+  $$('.hist-card').forEach(card=> card.onclick = ()=>{
+    state.historyPick = card.dataset.vid;
+    $$('.hist-card').forEach(c=> c.classList.toggle('on', c===card));
+    const v = versions.find(x=>x.id===state.historyPick);
+    const btn = $('#histApply');
+    if(btn) btn.textContent = v ? `使用 V${v.v}` : '使用所选版本';
+  });
+  const apply = $('#histApply');
+  if(apply) apply.onclick = ()=>{
+    const v = versions.find(x=>x.id===state.historyPick);
+    if(!v){ toast('请选择一个版本'); return; }
+    sh.activeVersion = v.id;
+    const idx = state.historyShot;
+    state.historyShot = null; state.historyPick = null;
+    closeModal(); renderBody();
+    toast(`分镜 ${String(idx+1).padStart(2,'0')} 已切换为 V${v.v}`);
+  };
+}
+function openShotHistory(i){
+  const sh = state.shots[i];
+  if(!sh || !shotVersions(sh).length){ toast('该分镜暂无生成记录'); return; }
+  state.historyShot = i;
+  state.historyPick = activeShotVersion(sh).id;
+  renderShotHistory();
+}
+function closeShotHistory(){
+  state.historyShot = null;
+  state.historyPick = null;
+  closeModal();
+}
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+function downloadPoster(src, base){
+  try{
+    const svg = decodeURIComponent(src.split(',')[1] || '');
+    downloadBlob(new Blob([svg], {type:'image/svg+xml'}), base+'.svg');
+    toast('已下载视频预览图（当前浏览器不支持视频录制）');
+  }catch(e){ toast('下载失败，请重试'); }
+}
+function downloadClipVideo(src, base, label, seconds){
+  toast('正在生成视频文件…');
+  const img = new Image();
+  img.onload = ()=>{
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280; canvas.height = 720;
+    const ctx = canvas.getContext('2d');
+    const MR = window.MediaRecorder;
+    const mime = MR && MR.isTypeSupported
+      ? ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=> MR.isTypeSupported(m))
+      : null;
+    if(!canvas.captureStream || !mime){ downloadPoster(src, base); return; }
+    let rec;
+    try{
+      rec = new MR(canvas.captureStream(30), {mimeType:mime, videoBitsPerSecond:2500000});
+    }catch(e){ downloadPoster(src, base); return; }
+    const chunks = [];
+    let finished = false;
+    rec.ondataavailable = e=>{ if(e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = ()=>{
+      if(finished) return; finished = true;
+      const blob = new Blob(chunks, {type:mime.split(';')[0]});
+      if(blob.size < 1024){ downloadPoster(src, base); return; }
+      downloadBlob(blob, base+'.webm');
+      toast('视频已下载（Demo）');
+    };
+    const drawCover = (scale)=>{
+      const ir = img.width/img.height, cr = canvas.width/canvas.height;
+      let dw, dh;
+      if(ir > cr){ dh = canvas.height*scale; dw = dh*ir; }
+      else { dw = canvas.width*scale; dh = dw/ir; }
+      ctx.drawImage(img, (canvas.width-dw)/2, (canvas.height-dh)/2, dw, dh);
+    };
+    const start = performance.now();
+    const draw = ()=>{
+      const t = Math.min(1, (performance.now()-start)/(seconds*1000));
+      ctx.fillStyle = '#080a12'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      drawCover(1 + t*0.035);
+      ctx.fillStyle = 'rgba(10,13,24,.6)'; ctx.fillRect(0,636,canvas.width,84);
+      ctx.fillStyle = '#fff'; ctx.font = '600 26px -apple-system,BlinkMacSystemFont,sans-serif';
+      ctx.fillText(label, 34, 688);
+      if(t < 1) requestAnimationFrame(draw);
+      else if(rec.state !== 'inactive') rec.stop();
+    };
+    rec.start();
+    draw();
+    setTimeout(()=>{ if(rec.state !== 'inactive') rec.stop(); }, seconds*1000 + 800);
+  };
+  img.onerror = ()=> toast('视频生成失败，请重试');
+  img.src = src;
+}
+function downloadShot(i){
+  const sh = state.shots[i];
+  if(!sh || !sh.done){ toast('该分镜尚未转绘'); return; }
+  const v = activeShotVersion(sh);
+  const no = String(i+1).padStart(2,'0');
+  downloadClipVideo(shotStill(sh), `${state.project.title}_分镜${no}_V${v?v.v:1}`, `分镜 ${no} · ${sh.dur} · ${v?'V'+v.v:''}`, 1.4);
 }
 function startExport(fmt, r){
   const done = state.shots.filter(s=>s.done).length;
@@ -1406,6 +1611,14 @@ function bindShot(){
     c.checked ? state.shotSel.add(i) : state.shotSel.delete(i);
     renderBody();
   });
+  $$('[data-shot-down]').forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
+    downloadShot(+b.dataset.shotDown);
+  });
+  $$('[data-shot-hist]').forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
+    openShotHistory(+b.dataset.shotHist);
+  });
   $('#genShot').onclick = ()=> genShot(state.activeShot);
   const batchStart = $('#shotBatchStart');
   if(batchStart) batchStart.onclick = ()=>{ state.shotBatch=true; state.shotSel.clear(); renderBody(); };
@@ -1435,30 +1648,67 @@ function bindShot(){
 /* ---- 合成成片 ---- */
 function filmHTML(){
   const cover = state.shots.find(s=>s.done) || state.shots[0];
-  const frame = drawScene(cover.scene, 'new', state.project.style);
+  const beforeFrame = drawScene(cover.scene, 'orig');
+  const afterFrame = cover.done ? shotStill(cover) : shotPlaceholderSVG();
+  const activeVer = activeShotVersion(cover);
   const bgmFrom = state.clips[0] ? state.clips[0].name : '原片音轨';
-  return `<div class="film-stage">
-    <div class="film-player" id="filmPlayer" role="button" tabindex="0" aria-label="播放合成成片，已迁移原片 BGM" title="播放合成成片">
-      <img src="${frame}" alt="合成成片">
-      <span class="film-player-play" id="filmPlayIcon">▶</span>
-      <span class="film-bgm" title="已迁移原片 BGM：${esc(bgmFrom)}">♪ 原片 BGM</span>
+  const player = (src, cls, bgm)=>`<div class="film-player ${cls}" data-film-play role="button" tabindex="0" aria-label="播放${cls==='before'?'转绘前原片':'合成成片'}" title="点击播放 / 暂停">
+      <img src="${src}" alt="${cls==='before'?'转绘前原片':'合成成片'}">
+      <span class="film-player-play">▶</span>
+      ${bgm?`<span class="film-bgm" title="已迁移原片 BGM：${esc(bgmFrom)}">♪ 原片 BGM</span>`:''}
+    </div>`;
+  const main = state.filmCompare
+    ? `<div class="film-cmp">
+        <figure class="film-side">
+          <figcaption><b>转绘前</b><span>原片</span></figcaption>
+          ${player(beforeFrame, 'before', false)}
+        </figure>
+        <figure class="film-side">
+          <figcaption><b>转绘后</b><span>${activeVer?'V'+activeVer.v+' · ':''}合成成片</span></figcaption>
+          ${player(afterFrame, 'after', true)}
+        </figure>
+      </div>`
+    : `<div class="film-single">${player(afterFrame, 'after', true)}</div>`;
+  return `<div class="film-stage ${state.filmCompare?'is-cmp':''}">
+    <div class="film-top">
+      <div class="film-title">
+        <b>合成成片</b>
+        <span>${state.filmCompare?'转绘前 / 转绘后对比':'原片 BGM 已迁移'}</span>
+      </div>
+      <div class="film-tools">
+        <button class="aghost ${state.filmCompare?'on':''}" id="filmCompare" type="button">⇆ ${state.filmCompare?'退出对比':'前后对比'}</button>
+        <button class="aprimary" id="filmDownload" type="button">⬇ 下载成片</button>
+      </div>
     </div>
+    <div class="film-canvas">${main}</div>
   </div>`;
 }
+function downloadFilm(){
+  const cover = state.shots.find(s=>s.done);
+  if(!cover){ toast('请先完成分镜转绘'); return; }
+  const v = activeShotVersion(cover);
+  downloadClipVideo(shotStill(cover), `${state.project.title}_成片${v?'_V'+v.v:''}`, '合成成片 · 原片 BGM 已迁移', 2.4);
+}
 function bindFilm(){
-  const player = $('#filmPlayer'); if(!player) return;
-  const icon = $('#filmPlayIcon');
-  const toggle = ()=>{
-    const playing = player.classList.toggle('playing');
-    player.setAttribute('aria-pressed', playing ? 'true' : 'false');
-    if(icon) icon.textContent = playing ? '❚❚' : '▶';
-    toast(playing ? '正在播放合成成片 · 原片 BGM 已迁移' : '已暂停');
-  };
-  player.onclick = toggle;
-  player.onkeydown = e=>{
-    if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(); }
-  };
+  $$('[data-film-play]').forEach(player=>{
+    const icon = $('.film-player-play', player);
+    const toggle = ()=>{
+      const playing = player.classList.toggle('playing');
+      player.setAttribute('aria-pressed', playing ? 'true' : 'false');
+      if(icon) icon.textContent = playing ? '❚❚' : '▶';
+      toast(playing ? '正在播放合成成片 · 原片 BGM 已迁移' : '已暂停');
+    };
+    player.onclick = toggle;
+    player.onkeydown = e=>{
+      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(); }
+    };
+  });
+  const cmp = $('#filmCompare');
+  if(cmp) cmp.onclick = ()=>{ state.filmCompare = !state.filmCompare; renderBody(); };
+  const dl = $('#filmDownload');
+  if(dl) dl.onclick = downloadFilm;
 }
 
 /* ---- 启动 ---- */
+ensureShotVersions();
 render();
