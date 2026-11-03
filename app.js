@@ -265,7 +265,6 @@ function renderProject(){
       <div class="tb-right">
         <button class="tb-ghost">★ 我的订阅</button>
         <button class="tb-ghost" id="assetBtn">◱ 项目资产</button>
-        <button class="tb-primary" id="exportAll">导出成片</button>
       </div>
     </div>
     <div class="proj-body ${state.stage==='clips'?'two':'three'}" id="pbody"></div>
@@ -278,7 +277,6 @@ function bindTopbar(){
   $('#back').onclick = ()=>{ state.screen='landing'; render(); };
   $('#title').onchange = e=> p.title = e.target.value || p.title;
   $('#assetBtn').onclick = ()=> selectStage('asset');
-  $('#exportAll').onclick= ()=> selectStage('film');
 }
 /* ---- 工作台主体 ---- */
 function renderBody(){
@@ -391,7 +389,7 @@ function chatMessages(){
       ? '分镜已全部转绘完成 🎉，可预览并导出合成成片。'
       : `成片预览已就绪，还有 <b>${total-done} 个分镜</b>待完成转绘。`});
     msgs.push({who:'a', card:true, html:stageResultCard('film')});
-    msgs.push({who:'a', html:'点击「导出成片」或右侧「导出合成成片」生成最终视频。'});
+    msgs.push({who:'a', html:'点击右侧「导出合成成片」生成最终视频。'});
   }
 
   return msgs;
@@ -1164,11 +1162,12 @@ function shotHTML(){
       <span class="shotc-no">${i+1}</span>${d?'':'<span class="shotc-wait">待转绘</span>'}<span class="shotc-dur">${s.dur}</span>
     </div>`;
   }).join('');
-  const seqTools = `<button class="aghost" id="exportShots">⬇ 导出</button>${state.shotBatch
+  const seqTools = `${state.shotBatch
     ? `<label class="selall"><input type="checkbox" id="shotSelAll">全选</label>
        <button class="aghost" id="shotBatchCancel">取消</button>
        <button class="aprimary" id="shotBatchGo">转绘所选 (${state.shotSel.size})</button>`
-    : `<button class="aprimary" id="shotBatchStart">批量转绘</button>`}`;
+    : `<button class="aprimary" id="shotBatchStart">批量转绘</button>`}
+    <button class="aghost" id="exportShots">⬇ 导出</button>`;
   return `
     <div class="sb-seq">
       <div class="sb-seq-head">
@@ -1213,54 +1212,22 @@ function genShot(i){
   state.generating.add(sh.id); renderBody();
   setTimeout(()=>{ state.generating.delete(sh.id); sh.done=true; renderBody(); toast('分镜已转绘'); }, 900);
 }
-function openExportDialog(){
-  const ep = state.episodes[state.activeEp];
+function startExport(fmt, r){
   const done = state.shots.filter(s=>s.done).length;
-  const total = state.shots.length;
-  const pend = total - done;
-  const reso = state.project.reso === '1080P' ? '1080p' : '720p';
-  modal(`<div class="export-dlg">
-    <div class="player-head"><b>导出视频</b><button onclick="closeModal()">✕</button></div>
-    <div class="exp-body">
-      <div class="exp-group">
-        <div class="exp-label">分辨率</div>
-        <div class="exp-seg">
-          <label><input type="radio" name="expReso" value="720p" ${reso==='720p'?'checked':''}>720p</label>
-          <label><input type="radio" name="expReso" value="1080p" ${reso==='1080p'?'checked':''}>1080p</label>
-        </div>
-      </div>
-      <div class="exp-group">
-        <div class="exp-label">导出视频格式</div>
-        <label class="exp-card">
-          <input type="radio" name="expFmt" value="film" checked>
-          <span class="exp-main"><b>成片（分集视频文件）</b><small>按集导出完整视频，共 ${state.episodes.length} 个视频文件</small></span>
-        </label>
-        <label class="exp-card">
-          <input type="radio" name="expFmt" value="clip">
-          <span class="exp-main"><b>分镜视频片段（多个分镜视频文件）</b><small>当前第 ${ep.no} 集 · ${done} 个已完成分镜，每个分镜导出为独立视频${pend?`；${pend} 个未完成分镜不导出`:''}</small></span>
-        </label>
-      </div>
-      <div class="exp-note">${pend?`当前第 ${ep.no} 集仍有 ${pend} 个分镜未完成转绘。`:'当前集分镜已全部转绘完成。'}</div>
-    </div>
-    <div class="exp-foot">
-      <button class="aghost" onclick="closeModal()">取消</button>
-      <button class="aprimary" id="expStart">开始导出</button>
-    </div>
-  </div>`);
-  $('#expStart').onclick = ()=>{
-    const r = document.querySelector('input[name="expReso"]:checked')?.value || '720p';
-    const fmt = document.querySelector('input[name="expFmt"]:checked')?.value || 'film';
-    if(fmt==='clip' && done===0){ toast('当前没有已完成转绘的分镜'); return; }
-    const label = fmt==='film' ? '分集成片' : '分镜视频片段';
-    const count = fmt==='film' ? state.episodes.length : done;
-    closeModal();
-    toast(`已开始导出 ${count} 个${label}（${r}）`);
-    setTimeout(()=> toast(`导出完成：${count} 个${label} · ${r}`), 1100);
-  };
+  if(fmt==='clip' && done===0){ toast('当前没有已完成转绘的分镜'); return false; }
+  const label = fmt==='film' ? '分集成片' : '分镜视频片段';
+  const count = fmt==='film' ? state.episodes.length : done;
+  toast(`已开始导出 ${count} 个${label}（${r}）`);
+  setTimeout(()=> toast(`导出完成：${count} 个${label} · ${r}`), 1100);
+  return true;
+}
+function exportShotsDefault(){
+  const r = state.project.reso === '1080P' ? '1080p' : '720p';
+  startExport('film', r);
 }
 function bindShot(){
   const exportBtn = $('#exportShots');
-  if(exportBtn) exportBtn.onclick = openExportDialog;
+  if(exportBtn) exportBtn.onclick = exportShotsDefault;
   $$('#strip .shotc').forEach(el=> el.onclick=()=>{
     const i = +el.dataset.i;
     if(state.shotBatch){
