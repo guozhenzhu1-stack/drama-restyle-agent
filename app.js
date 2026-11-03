@@ -350,9 +350,13 @@ function chatMessages(){
   if(clipN){
     msgs.push({who:'a', html: state.clipSource==='pan'
       ? `已从百度网盘文件夹拉取 <b>${clipN} 个视频</b>，并加入原片管理。`
-      : `已为你导入 <b>${clipN} 集</b>短剧原片，可在右侧拖拽排序、预览或继续上传。`});
+      : max === 0
+        ? `已为你导入 <b>${clipN} 集</b>短剧原片，可在右侧拖拽排序、预览或继续上传。`
+        : `已为你导入 <b>${clipN} 集</b>短剧原片，原片已确认并锁定，仅支持预览查看。`});
     msgs.push({who:'a', card:true, html:stageResultCard('clips')});
-    msgs.push({who:'a', html:'确认原片无误后，我会解析剧情，提炼角色、场景与道具资产。', action:'开始资产提炼', go:'asset'});
+    msgs.push({who:'a',
+      html: max === 0 ? '确认原片无误后，我会解析剧情，提炼角色、场景与道具资产。' : '原片已确认并锁定，后续仅支持预览查看。',
+      ...(max === 0 ? { action:'确认原片，提炼资产', go:'asset' } : {})});
   }else{
     msgs.push({who:'a', html:'暂未导入原片，请上传视频或从百度网盘导入。'});
   }
@@ -363,7 +367,9 @@ function chatMessages(){
     const p = state.assets.prop.length;
     msgs.push({who:'a', html:`已从原片剧情中提炼出 <b>${c} 个角色、${s} 个场景、${p} 个道具</b>，并自动生成转绘 Prompt。`});
     msgs.push({who:'a', card:true, html:stageResultCard('asset')});
-    msgs.push({who:'a', html:'请在右侧确认资产，逐个或批量生成资产图；确认后开始分镜拆解。', action:'开始分镜转绘', go:'shot'});
+    msgs.push({who:'a',
+      html: max === 1 ? '请在右侧确认资产，逐个或批量生成资产图；确认后开始分镜拆解。' : '资产确认已完成，可继续在右侧查看与调整资产。',
+      ...(max === 1 ? { action:'开始分镜转绘', go:'shot' } : {})});
   }
 
   if(max >= 2){
@@ -371,7 +377,11 @@ function chatMessages(){
     const done = state.shots.filter(s=>s.done).length;
     msgs.push({who:'a', html:`已基于原片与资产自动拆解出 <b>${total} 个分镜</b>，描述中 <span class="ref">@引用</span> 了对应资产。`});
     msgs.push({who:'a', card:true, html:stageResultCard('shot')});
-    msgs.push({who:'a', html:`当前已转绘 <b>${done}/${total}</b> 个分镜，可逐个或批量转绘；全部完成后即可合成成片。`, action:'合成成片', go:'film'});
+    msgs.push({who:'a',
+      html: max === 2
+        ? `当前已转绘 <b>${done}/${total}</b> 个分镜，可逐个或批量转绘；全部完成后即可合成成片。`
+        : `分镜转绘进行中，当前已完成 <b>${done}/${total}</b> 个分镜。`,
+      ...(max === 2 ? { action:'合成成片', go:'film' } : {})});
   }
 
   if(max >= 3){
@@ -450,30 +460,36 @@ function bindEplist(){
   });
 }
 /* ===================== 原片管理器 ===================== */
+function clipsLocked(){ return (state.maxStage || 0) >= 1; }
 function clipsHTML(){
+  const locked = clipsLocked();
   const cards = state.clips.map((c,i)=>{
     const img = drawScene(c.scene, 'orig');
-    return `<div class="clipc" draggable="true" data-i="${i}">
+    return `<div class="clipc ${locked?'is-locked':''}" draggable="${locked?'false':'true'}" data-i="${i}">
       <div class="clip-thumb"><img src="${img}" alt="">${c.from==='pan'?'<span class="clip-src">☁ 网盘</span>':''}<span class="clip-play">▶</span><span class="clip-dur">${c.dur}</span></div>
       <div class="clip-meta">
         <div class="clip-label"><b>第 ${i+1} 集</b><span class="clip-name" title="${esc(c.name)}">${esc(c.name)}</span></div>
-        <button class="clip-del" data-i="${i}">✕</button>
+        ${locked?'':`<button class="clip-del" data-i="${i}">✕</button>`}
       </div>
     </div>`;
   }).join('');
-  return `<div class="mgr">
+  return `<div class="mgr ${locked?'is-locked':''}">
     <div class="mgr-head">
-      <div>原片管理 <em>${state.clips.length} ${state.clipSource==='pan'?'个视频':'集'}</em></div>
-      <button class="tb-primary" id="addClip">＋ 上传原片</button>
+      <div>原片管理 <em>${state.clips.length} ${state.clipSource==='pan'?'个视频':'集'}</em>${locked?'<span class="mgr-lock">🔒 已确认 · 仅可查看</span>':''}</div>
+      ${locked?'':'<button class="tb-primary" id="addClip">＋ 上传原片</button>'}
     </div>
     <div class="clip-grid" id="clipGrid">${cards}</div>
-    <p class="mgr-tip">拖拽卡片可调整顺序 · 点击缩略图预览 · ✕ 删除</p>
+    <p class="mgr-tip">${locked
+      ? '原片已确认并锁定，仅支持预览查看；如需更换请返回入口重新创建项目'
+      : '拖拽卡片可调整顺序 · 点击缩略图预览 · ✕ 删除'}</p>
   </div>`;
 }
 function bindClips(){
+  const locked = clipsLocked();
   let dragI = null;
   $$('#clipGrid .clipc').forEach(el=>{
     el.querySelector('.clip-thumb').onclick = ()=> playClip(+el.dataset.i);
+    if(locked) return;
     el.ondragstart = ()=>{ dragI = +el.dataset.i; el.classList.add('dragging'); };
     el.ondragend   = ()=> el.classList.remove('dragging');
     el.ondragover  = e=> e.preventDefault();
@@ -485,7 +501,8 @@ function bindClips(){
   });
   $$('#clipGrid .clip-del').forEach(b=> b.onclick=e=>{ e.stopPropagation();
     state.clips.splice(+b.dataset.i,1); renderBody(); toast('已删除'); });
-  $('#addClip').onclick = ()=>{
+  const add = $('#addClip');
+  if(add) add.onclick = ()=>{
     const n = state.clips.length+1;
     state.clips.push({ id:'c'+Date.now(), name:`EP${String(n).padStart(2,'0')}_新上传原片.mp4`, dur:'00:05', scene:SC.bedroom });
     renderBody(); toast('已上传第'+n+'集');

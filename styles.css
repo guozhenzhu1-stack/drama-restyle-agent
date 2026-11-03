@@ -210,6 +210,9 @@ button{font-family:inherit}
 .mgr{flex:1;overflow:auto;padding:22px 26px}
 .mgr-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .mgr-head em{font-style:normal;color:var(--text-3);font-size:13px;margin-left:6px}
+.mgr-lock{display:inline-flex;align-items:center;gap:4px;margin-left:9px;padding:2px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-3);font-size:11.5px;font-weight:500;vertical-align:middle}
+.clipc.is-locked{cursor:default}
+.clipc.is-locked .clip-thumb{cursor:pointer}
 .clip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px}
 .clipc{cursor:pointer}
 .clip-thumb{position:relative;border-radius:12px;overflow:hidden;height:140px;box-shadow:var(--shadow-1)}
