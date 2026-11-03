@@ -302,16 +302,33 @@ const CHAT = {
     {who:'a', html:'点击「导出合成成片」生成最终视频。', action:'导出合成成片', go:'film'},
   ],
 };
+function clipsResultCard(){
+  const clips = state.clips;
+  if(!clips.length) return '';
+  const thumbs = clips.slice(0,3).map((c,i)=>{
+    const img = drawScene(c.scene, 'orig');
+    return `<span class="cf-thumb" style="--i:${i}"><img src="${img}" alt=""></span>`;
+  }).join('');
+  const first = clips[0].name;
+  const fromPan = state.clipSource === 'pan';
+  return `<div class="cf-card" id="clipResultCard" role="button" tabindex="0" title="展开原片管理">
+    <div class="cf-stack">${thumbs}<span class="cf-count">${clips.length}</span></div>
+    <div class="cf-meta">
+      <b>${fromPan?'已从网盘拉取':'已上传'} ${clips.length} 个原片视频</b>
+      <span title="${esc(first)}">${esc(first)}${clips.length>1?` 等 ${clips.length} 个文件`:''}</span>
+    </div>
+    <span class="cf-go" aria-hidden="true">›</span>
+  </div>`;
+}
 function chatMessages(){
   if(state.stage==='clips'){
     const n = state.clips.length;
-    const fromPan = state.clipSource === 'pan';
+    if(!n) return [
+      {who:'a', html:'暂未导入原片，请上传视频或从百度网盘导入。'},
+      {who:'a', html:'确认原片无误后，我会先解析剧情，并按目标地区完成剧本本土化。', action:'开始剧本本土化', go:'script'},
+    ];
     return [
-      {who:'a', html: n
-        ? (fromPan
-            ? `已从百度网盘文件夹拉取 <b>${n} 个视频</b>，并加入原片管理。`
-            : `已为你导入 <b>${n} 集</b>短剧原片，可在右侧拖拽排序、预览或继续上传。`)
-        : '暂未导入原片，请上传视频或从百度网盘导入。'},
+      {who:'a', card:true, html:clipsResultCard()},
       {who:'a', html:'确认原片无误后，我会先解析剧情，并按目标地区完成剧本本土化。', action:'开始剧本本土化', go:'script'},
     ];
   }
@@ -339,7 +356,7 @@ function chatMessages(){
 function chatHTML(){
   const msgs = chatMessages();
   const body = msgs.map(m=>`
-    <div class="cmsg ${m.who}">
+    <div class="cmsg ${m.who}${m.card?' cmsg-card':''}">
       <div class="cbubble">${m.html}
         ${m.action?`<button class="cbtn" data-go="${m.go}">${m.action}</button>`:''}
       </div>
@@ -359,6 +376,22 @@ function chatHTML(){
 }
 function bindChat(){
   $$('.cbtn').forEach(b=> b.onclick=()=>{ state.stage=b.dataset.go; render(); });
+  const card = $('#clipResultCard');
+  if(card){
+    const openClips = ()=>{
+      state.stage = 'clips';
+      render();
+      const mgr = document.querySelector('.mgr');
+      if(mgr){
+        mgr.classList.add('mgr-flash');
+        setTimeout(()=>mgr.classList.remove('mgr-flash'), 700);
+      }
+    };
+    card.onclick = openClips;
+    card.onkeydown = e=>{
+      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openClips(); }
+    };
+  }
   const send = ()=>{
     const v = $('#cin').value.trim(); if(!v) return;
     $('#cscroll').insertAdjacentHTML('beforeend', `<div class="cmsg u"><div class="cbubble">${esc(v)}</div></div>`);
