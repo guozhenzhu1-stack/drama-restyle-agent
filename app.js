@@ -200,7 +200,7 @@ function enterProject(){
   state.project.style = L.style; // 入口风格带入项目
   state.project.modelVideo = L.modelVideo; state.project.modelImage = L.modelImage;
   state.project.ratio = L.ratio; state.project.reso = L.reso; state.project.region = L.region;
-  state.screen='project'; state.stage='clips';
+  state.screen='project'; state.stage='clips'; state.maxStage=0;
   render();
 }
 /* ---- 百度网盘文件夹导入（Demo 模拟拉取） ---- */
@@ -237,11 +237,22 @@ function importFromPan(){
   }, 1400);
 }
 /* ===================== 项目工作台 ===================== */
-const STAGES = [
-  {k:'clips', label:'原片管理'}, {k:'script', label:'剧本本土化'},
-  {k:'asset', label:'资产确认'}, {k:'shot',  label:'分镜转绘'},
-  {k:'film',  label:'合成成片'},
-];
+const FLOW = ['clips', 'asset', 'shot', 'film'];
+const STAGE_LABEL = { clips:'原片管理', asset:'资产确认', shot:'分镜转绘', film:'合成成片' };
+/* 切换右侧工作区：记录已推进到的最远环节，并保留对话框滚动位置 */
+function selectStage(k){
+  if(!STAGE_LABEL[k]) return;
+  const sc = $('#cscroll'), top = sc ? sc.scrollTop : 0;
+  state.stage = k;
+  state.maxStage = Math.max(state.maxStage || 0, FLOW.indexOf(k));
+  render();
+  const sc2 = $('#cscroll'); if(sc2) sc2.scrollTop = top;
+  const target = k==='clips' ? $('.mgr') : $('#pbodywrap');
+  if(target){
+    target.classList.add('stage-flash');
+    setTimeout(()=> target.classList.remove('stage-flash'), 700);
+  }
+}
 function renderProject(){
   const p = state.project;
   $('#main').innerHTML = `
@@ -257,10 +268,6 @@ function renderProject(){
         <button class="tb-primary" id="exportAll">导出成片</button>
       </div>
     </div>
-    <div class="proj-tabs">
-      ${STAGES.map(s=>`<button data-k="${s.k}" class="${state.stage===s.k?'on':''}">${s.label}</button>`).join('')}
-      ${state.stage==='shot'?'<button class="ptab-export" id="exportShots">⬇ 导出</button>':''}
-    </div>
     <div class="proj-body ${state.stage==='clips'?'two':'three'}" id="pbody"></div>
   </div>`;
   bindTopbar();
@@ -270,88 +277,114 @@ function bindTopbar(){
   const p = state.project;
   $('#back').onclick = ()=>{ state.screen='landing'; render(); };
   $('#title').onchange = e=> p.title = e.target.value || p.title;
-  $('#assetBtn').onclick = ()=>{ state.stage='asset'; render(); };
-  const expShots = $('#exportShots'); if(expShots) expShots.onclick = openExportDialog;
-  $('#exportAll').onclick= ()=>{ state.stage='film'; render(); };
-  $$('.proj-tabs button[data-k]').forEach(b=> b.onclick=()=>{ state.stage=b.dataset.k; render(); });
+  $('#assetBtn').onclick = ()=> selectStage('asset');
+  $('#exportAll').onclick= ()=> selectStage('film');
 }
 /* ---- 工作台主体 ---- */
 function renderBody(){
   const pb = $('#pbody');
-  if(state.stage==='clips')      pb.innerHTML = chatHTML() + clipsHTML();
-  else if(state.stage==='script') pb.innerHTML = chatHTML() + tocHTML() + scriptHTML();
-  else                            pb.innerHTML = chatHTML() + eplistHTML() + panelHTML();
+  if(state.stage==='clips') pb.innerHTML = chatHTML() + clipsHTML();
+  else                      pb.innerHTML = chatHTML() + eplistHTML() + panelHTML();
   bindChat();
-  if(state.stage==='clips')       bindClips();
-  else if(state.stage==='script') bindScript();
+  if(state.stage==='clips') bindClips();
   else { bindEplist(); bindPanel(); }
 }
 
-/* ---- Agent 对话 ---- */
-const CHAT = {
-  asset:[
-    {who:'a', html:'已结合本土化剧本，从原片中提炼出 <b>2 个角色、3 个场景、2 个道具</b>，并自动生成了转绘 Prompt。'},
-    {who:'a', html:'请在右侧确认并逐个 / 批量生成资产图；确认后进入分镜转绘。', action:'前往分镜转绘', go:'shot'},
-  ],
-  shot:[
-    {who:'a', html:'已基于原片与资产自动拆解出 <b>7 个分镜</b>，描述中 <span class="ref">@引用</span> 了对应资产。'},
-    {who:'a', html:'可逐个或批量转绘；全部完成后即可合成成片。', action:'合成成片', go:'film'},
-  ],
-  film:[
-    {who:'a', html:'分镜已全部转绘完成 🎉，可预览并导出合成成片。'},
-    {who:'a', html:'点击「导出合成成片」生成最终视频。', action:'导出合成成片', go:'film'},
-  ],
-};
-function clipsResultCard(){
-  const clips = state.clips;
-  if(!clips.length) return '';
-  const thumbs = clips.slice(0,3).map((c,i)=>{
-    const img = drawScene(c.scene, 'orig');
-    return `<span class="cf-thumb" style="--i:${i}"><img src="${img}" alt=""></span>`;
-  }).join('');
-  const first = clips[0].name;
-  const fromPan = state.clipSource === 'pan';
-  return `<div class="cf-card" id="clipResultCard" role="button" tabindex="0" title="展开原片管理">
-    <div class="cf-stack">${thumbs}<span class="cf-count">${clips.length}</span></div>
-    <div class="cf-meta">
-      <b>${fromPan?'已从网盘拉取':'已上传'} ${clips.length} 个原片视频</b>
-      <span title="${esc(first)}">${esc(first)}${clips.length>1?` 等 ${clips.length} 个文件`:''}</span>
+/* ---- Agent 对话：各环节结果卡片 ---- */
+function resStack(thumbs, badge){
+  return `<div class="res-media"><div class="cf-stack">
+    ${thumbs.map((src,i)=>`<span class="cf-thumb" style="--i:${i}"><img src="${src}" alt=""></span>`).join('')}
+    <span class="cf-count">${badge}</span>
+  </div></div>`;
+}
+function stageResultCard(k){
+  const active = state.stage === k;
+  const clipN = state.clips.length;
+  const charN = state.assets.character.length;
+  const sceneN = state.assets.scene.length;
+  const propN = state.assets.prop.length;
+  const assetN = charN + sceneN + propN;
+  const shotN = state.shots.length;
+  const shotDone = state.shots.filter(s=>s.done).length;
+  let media = '', title = '', sub = '', prog = '';
+
+  if(k==='clips'){
+    title = STAGE_LABEL.clips;
+    media = resStack(state.clips.slice(0,3).map(c=>drawScene(c.scene,'orig')), clipN);
+    const first = clipN ? state.clips[0].name : '';
+    sub = clipN
+      ? `${state.clipSource==='pan'?'网盘导入':'本地上传'} · ${esc(first)}${clipN>1?` 等 ${clipN} 个视频`:''}`
+      : '暂未导入原片';
+  }else if(k==='asset'){
+    title = STAGE_LABEL.asset;
+    media = `<div class="res-media res-total"><b>${assetN}</b><span>项资产</span></div>`;
+    sub = `角色 ${charN} · 场景 ${sceneN} · 道具 ${propN}`;
+  }else if(k==='shot'){
+    title = STAGE_LABEL.shot;
+    media = resStack(state.shots.slice(0,3).map(s=>drawScene(s.scene, s.done?'new':'orig', state.project.style)), `${shotDone}/${shotN}`);
+    sub = `共 ${shotN} 个分镜 · 已转绘 ${shotDone} 个`;
+    const pct = shotN ? Math.round(shotDone / shotN * 100) : 0;
+    prog = `<div class="res-prog"><i style="width:${pct}%"></i></div>`;
+  }else{
+    title = STAGE_LABEL.film;
+    const cover = state.shots.find(s=>s.done) || state.shots[0];
+    media = `<div class="res-media res-poster"><img src="${drawScene(cover.scene,'new',state.project.style)}" alt=""><span class="res-play">▶</span><span class="cf-count">${shotDone}/${shotN}</span></div>`;
+    sub = shotDone === shotN ? '全部分镜已完成，可导出成片' : `待完成 ${shotN-shotDone} 个分镜后合成`;
+  }
+
+  return `<div class="res-card ${active?'on':''}" data-stage="${k}" role="button" tabindex="0" title="在右侧查看${title}">
+    ${media}
+    <div class="res-body">
+      <div class="res-title"><b>${title}</b>${active?'<em>当前查看</em>':''}</div>
+      <span class="res-sub" title="${esc(sub)}">${sub}</span>
+      ${prog}
     </div>
-    <span class="cf-go" aria-hidden="true">›</span>
+    <span class="res-go" aria-hidden="true">›</span>
   </div>`;
 }
 function chatMessages(){
-  if(state.stage==='clips'){
-    const n = state.clips.length;
-    if(!n) return [
-      {who:'a', html:'暂未导入原片，请上传视频或从百度网盘导入。'},
-      {who:'a', html:'确认原片无误后，我会先解析剧情，并按目标地区完成剧本本土化。', action:'开始剧本本土化', go:'script'},
-    ];
-    return [
-      {who:'a', card:true, html:clipsResultCard()},
-      {who:'a', html:'确认原片无误后，我会先解析剧情，并按目标地区完成剧本本土化。', action:'开始剧本本土化', go:'script'},
-    ];
+  const msgs = [];
+  const clipN = state.clips.length;
+  const max = state.maxStage || 0;
+
+  if(clipN){
+    msgs.push({who:'a', html: state.clipSource==='pan'
+      ? `已从百度网盘文件夹拉取 <b>${clipN} 个视频</b>，并加入原片管理。`
+      : `已为你导入 <b>${clipN} 集</b>短剧原片，可在右侧拖拽排序、预览或继续上传。`});
+    msgs.push({who:'a', card:true, html:stageResultCard('clips')});
+    msgs.push({who:'a', html:'确认原片无误后，我会解析剧情，提炼角色、场景与道具资产。', action:'开始资产提炼', go:'asset'});
+  }else{
+    msgs.push({who:'a', html:'暂未导入原片，请上传视频或从百度网盘导入。'});
   }
-  if(state.stage==='script'){
-    const lang = regionLang(state.project.region), L = SCRIPT_LANGS[lang];
-    const n = state.epScripts.length;
-    const isZh = lang === 'zh';
-    if(state.scriptSource && !state.scriptSource.demo){
-      return [
-        {who:'a', html:`已读取上传剧本 <b>${esc(state.scriptSource.name)}</b>，自动拆分为 <b>${n} 集</b>，并完成场次与对白结构识别。`},
-        {who:'a', html:`右侧为上传稿原文，可逐集查看，也支持整本下载。请确认该稿为<b>修改完成后、与本剧视频逐集匹配</b>的版本；如需按目标地区 <b>${esc(regionLabel(state.project.region))}</b> 继续改写，可在对话中调整。`, action:'确认剧本，提炼资产', go:'asset'},
-      ];
-    }
-    return [
-      {who:'a', html:isZh
-        ? `已完成全剧 <b>${n} 集</b>的剧情解析，并按目标地区 <b>${esc(regionLabel(state.project.region))}</b> 校对中文原生稿。`
-        : `已完成全剧 <b>${n} 集</b>的剧情解析，并按目标地区 <b>${esc(regionLabel(state.project.region))}</b> 完成剧本本土化。`},
-      {who:'a', html:isZh
-        ? `人名、称谓与单集节奏均已校对，交付稿为 <b>中文原生剧本</b>。右侧可逐集查看，也支持整本下载。`
-        : `人名、称谓、俚语与单集节奏均已适配；交付稿<b>非台词部分（场次、动作、人名等）统一使用中文，仅台词使用${esc(L.name)}</b>。右侧可逐集查看，也支持整本下载。`, action:'确认剧本，提炼资产', go:'asset'},
-    ];
+
+  if(max >= 1){
+    const c = state.assets.character.length;
+    const s = state.assets.scene.length;
+    const p = state.assets.prop.length;
+    msgs.push({who:'a', html:`已从原片剧情中提炼出 <b>${c} 个角色、${s} 个场景、${p} 个道具</b>，并自动生成转绘 Prompt。`});
+    msgs.push({who:'a', card:true, html:stageResultCard('asset')});
+    msgs.push({who:'a', html:'请在右侧确认资产，逐个或批量生成资产图；确认后开始分镜拆解。', action:'开始分镜转绘', go:'shot'});
   }
-  return CHAT[state.stage] || [];
+
+  if(max >= 2){
+    const total = state.shots.length;
+    const done = state.shots.filter(s=>s.done).length;
+    msgs.push({who:'a', html:`已基于原片与资产自动拆解出 <b>${total} 个分镜</b>，描述中 <span class="ref">@引用</span> 了对应资产。`});
+    msgs.push({who:'a', card:true, html:stageResultCard('shot')});
+    msgs.push({who:'a', html:`当前已转绘 <b>${done}/${total}</b> 个分镜，可逐个或批量转绘；全部完成后即可合成成片。`, action:'合成成片', go:'film'});
+  }
+
+  if(max >= 3){
+    const total = state.shots.length;
+    const done = state.shots.filter(s=>s.done).length;
+    msgs.push({who:'a', html: done===total
+      ? '分镜已全部转绘完成 🎉，可预览并导出合成成片。'
+      : `成片预览已就绪，还有 <b>${total-done} 个分镜</b>待完成转绘。`});
+    msgs.push({who:'a', card:true, html:stageResultCard('film')});
+    msgs.push({who:'a', html:'点击「导出成片」或右侧「导出合成成片」生成最终视频。'});
+  }
+
+  return msgs;
 }
 function chatHTML(){
   const msgs = chatMessages();
@@ -375,23 +408,14 @@ function chatHTML(){
   </div>`;
 }
 function bindChat(){
-  $$('.cbtn').forEach(b=> b.onclick=()=>{ state.stage=b.dataset.go; render(); });
-  const card = $('#clipResultCard');
-  if(card){
-    const openClips = ()=>{
-      state.stage = 'clips';
-      render();
-      const mgr = document.querySelector('.mgr');
-      if(mgr){
-        mgr.classList.add('mgr-flash');
-        setTimeout(()=>mgr.classList.remove('mgr-flash'), 700);
-      }
-    };
-    card.onclick = openClips;
+  $$('.cbtn').forEach(b=> b.onclick=()=> selectStage(b.dataset.go));
+  $$('.res-card').forEach(card=>{
+    const open = ()=> selectStage(card.dataset.stage);
+    card.onclick = open;
     card.onkeydown = e=>{
-      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openClips(); }
+      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); open(); }
     };
-  }
+  });
   const send = ()=>{
     const v = $('#cin').value.trim(); if(!v) return;
     $('#cscroll').insertAdjacentHTML('beforeend', `<div class="cmsg u"><div class="cbubble">${esc(v)}</div></div>`);
@@ -406,9 +430,9 @@ function bindChat(){
   $('#cin').onkeydown = e=>{ if(e.key==='Enter') send(); };
 }
 
-/* ---- 分集列表（中栏，样式与剧本本土化目录一致） ---- */
+/* ---- 分集列表（中栏目录） ---- */
 function eplistHTML(){
-  const active = state.stage==='script' ? state.scriptEp : state.activeEp;
+  const active = state.activeEp;
   const items = state.episodes.map((e,i)=>`
     <div class="toc-item ${i===active?'on':''}" data-i="${i}" title="${esc(e.title)}">
       <span class="toc-title">第 ${e.no} 集</span>
@@ -421,8 +445,7 @@ function eplistHTML(){
 }
 function bindEplist(){
   $$('.eplist-toc .toc-item').forEach(el=> el.onclick=()=>{
-    if(state.stage==='script') state.scriptEp = +el.dataset.i;
-    else                       state.activeEp = +el.dataset.i;
+    state.activeEp = +el.dataset.i;
     render();
   });
 }
@@ -476,351 +499,16 @@ function playClip(i){
     <div class="player-foot">原片预览 · ${c.dur} · 占位画面（Demo）</div>
   </div>`);
 }
-/* ===================== 剧本本土化 ===================== */
-const ADAPT_TIPS = {
-  zh:["中文原生稿","称谓校对","口语化对白","单集节奏"],
-  en:["人名西化","称谓适配","俚语替换","对白节奏"],
-  ja:["人名本地化","敬语分级","文化梗替换","对白节奏"],
-  ko:["人名本地化","敬语分级","文化梗替换","对白节奏"],
-  es:["人名本地化","称谓适配","俚语替换","对白节奏"],
-};
-/* 目录导航（左栏） */
-function tocHTML(){
-  const eps = state.epScripts;
-  const items = eps.map((e,i)=>{
-    return `<a class="toc-item ${i===state.scriptEp?'on':''}" data-i="${i}" title="${esc(e.title)}">
-      <span class="toc-title">第 ${e.no} 集</span>
-      <span class="toc-zh">${esc(e.title)}</span>
-    </a>`;
-  }).join('');
-  return `<nav class="toc">
-    <div class="toc-head">目录 <em>${eps.length} 集</em></div>
-    <div class="toc-body" id="tocBody">${items}</div>
-  </nav>`;
-}
-/* 单集剧本（连续长文档中的一节） */
-function episodeHTML(ep, idx, lang){
-  if(ep.raw) return rawEpisodeHTML(ep, idx);
-  const sec = ep.scenes.length * 24;
-  const dur = `${Math.floor(sec/60)}'${String(sec%60).padStart(2,'0')}"`;
-  /* 剧本语言规则：非台词（场次/动作/人名/标题）固定中文，仅台词使用目标语言 */
-  const scenes = ep.scenes.map((sc,i)=>{
-    const actionZh = (sc.actionZh && sc.actionZh[lang]) || sc.action.zh;
-    return `
-    <div class="sc-block">
-      <div class="sc-head"><span class="sc-num">场 ${i+1}</span>
-        <span class="sc-head-txt">${esc(sc.head.zh)}</span>
-      </div>
-      <p class="sc-action">${esc(actionZh)}</p>
-      ${sc.lines.map(l=>{
-        const c = SCRIPT_CAST[l.who];
-        const zhName = (c.zhOf && c.zhOf[lang]) || c.zh;
-        return `<div class="sc-line">
-          <div class="sc-who">${esc(zhName)}<small>${esc(c.role)}</small></div>
-          <p class="sc-text">${esc(l.t[lang])}</p>
-        </div>`;
-      }).join('')}
-    </div>`;
-  }).join('');
-  return `<section class="script-ep" id="script-ep-${idx}" data-ep="${idx}">
-    <div class="ep-kicker">第 ${String(ep.no).padStart(2,'0')} 集</div>
-    <h2 class="ep-h">${esc(ep.title)}</h2>
-    <div class="ep-meta">第 ${ep.no} 集 · ${ep.scenes.length} 场 · 约 ${dur}</div>
-    ${scenes}
-  </section>`;
-}
-/* 上传剧本：原文分集渲染 */
-const RAW_SCENE_RE = /^\s*(?:内景|外景|日景|夜景|INT\.?|EXT\.?|场\s*\d+|第\s*\d+\s*场)/i;
-const RAW_LINE_RE  = /^([^：:]{1,12}?)\s*(?:[（(][^）)]*[）)])?\s*[：:]\s*(.+)$/;
-function rawEpisodeHTML(ep, idx){
-  const lines = ep.raw.split('\n');
-  let scenes = 0, body = '';
-  lines.forEach(line=>{
-    const t = line.trim();
-    if(!t) return;
-    const m = t.match(RAW_LINE_RE);
-    if(RAW_SCENE_RE.test(t)){
-      scenes++;
-      body += `<div class="sc-head"><span class="sc-num">场 ${scenes}</span><span>${esc(t)}</span></div>`;
-    } else if(m && !/[。！？；]/.test(m[1])){
-      body += `<div class="sc-line">
-        <div class="sc-who">${esc(m[1].trim())}</div>
-        <p class="sc-text">${esc(m[2])}</p>
-      </div>`;
-    } else {
-      body += `<p class="sc-action">${esc(t)}</p>`;
-    }
-  });
-  return `<section class="script-ep raw-ep" id="script-ep-${idx}" data-ep="${idx}">
-    <div class="ep-kicker">第 ${String(ep.no).padStart(2,'0')} 集 · 上传稿原文</div>
-    <h2 class="ep-h">${esc(ep.title)}</h2>
-    <div class="ep-meta">第 ${ep.no} 集 · ${ep.raw.length} 字 · 上传稿原文</div>
-    ${body || '<p class="sc-action">（本集暂无正文）</p>'}
-  </section>`;
-}
-/* 解析上传的纯文本剧本：按「第 X 集 / EP N」分集 */
-const EP_HEAD_RE = /^\s*(?:#+\s*)?(?:第\s*[0-9零一二三四五六七八九十百两]+\s*集|(?:EP|EPISODE|E)\s*\.?\s*\d{1,3})/i;
-const EP_HEAD_STRIP = /^\s*(?:#+\s*)?(?:第\s*[0-9零一二三四五六七八九十百两]+\s*集|(?:EP|EPISODE|E)\s*\.?\s*\d{1,3})\s*[：:·.\-—、]?\s*/i;
-function parseScriptText(text, fileName){
-  const lines = text.replace(/\r\n?/g,'\n').split('\n');
-  const groups = [];
-  let cur = null;
-  lines.forEach(line=>{
-    if(EP_HEAD_RE.test(line)){
-      const title = line.replace(EP_HEAD_STRIP,'').trim();
-      cur = { title, lines:[] };
-      groups.push(cur);
-    } else if(cur){
-      cur.lines.push(line);
-    }
-  });
-  if(!groups.length){
-    const body = text.trim();
-    if(!body) return [];
-    const base = (fileName||'上传剧本').replace(/\.[^.]+$/,'');
-    return [{ no:1, title:base, raw:body }];
-  }
-  return groups.map((g,i)=>({
-    no:i+1,
-    title:g.title || `第 ${i+1} 集`,
-    raw:g.lines.join('\n').trim() || '（本集暂无正文）',
-  }));
-}
-function applyUploadedScript(text, file){
-  const eps = parseScriptText(text, file.name);
-  if(!eps.length){ toast('未解析到剧本内容，请检查文件'); return; }
-  state.epScripts = eps;
-  state.scriptSource = { name:file.name, demo:false, at:new Date().toLocaleString('zh-CN',{hour12:false}) };
-  state.scriptEp = 0;
-  renderBody();
-  toast(`已上传《${file.name}》，解析 ${eps.length} 集`);
-}
-function handleScriptUpload(file){
-  if(/\.(txt|md|markdown)$/i.test(file.name)){
-    const r = new FileReader();
-    r.onload  = ()=> applyUploadedScript(String(r.result||''), file);
-    r.onerror = ()=> toast('文件读取失败，请重试');
-    r.readAsText(file, 'utf-8');
-  } else {
-    toast('Demo 环境暂仅解析 .txt / .md，请将文档另存为 txt 后上传');
-  }
-}
-function scriptHTML(){
-  const lang = regionLang(state.project.region);
-  const L = SCRIPT_LANGS[lang];
-  const isZh = lang === 'zh';
-  const src = state.scriptSource || { name:'示例剧本（Demo）', demo:true };
-  const demo = !!src.demo;
-  const eps = state.epScripts;
-  return `<div class="panel script-panel">
-    <div class="script-head">
-      <div class="script-head-l">
-        <b>剧本本土化</b>
-        <span class="lang-chip">${demo?`台词 ${L.name} · 非台词中文`:'上传稿 · 原文'}</span>
-        <span class="adapt-region">${esc(regionLabel(state.project.region))}</span>
-      </div>
-      <div class="script-head-r">
-        <input type="file" id="scriptFile" accept=".txt,.md,.markdown" hidden>
-        <button class="aghost" id="uploadScript" title="请上传修改完成、且与本剧原片逐集匹配的剧本">⬆ 上传本剧修改后剧本</button>
-        <button class="tb-primary" id="dlBook">⬇ 下载整本剧本</button>
-      </div>
-    </div>
-    <div class="script-src ${demo?'is-demo':'is-upload'}">
-      <span class="src-file">📄 ${esc(src.name)}</span>
-      <span class="src-meta">${eps.length} 集${src.at?' · '+esc(src.at)+' 上传':' · 内置示例'}</span>
-      ${demo
-        ? '<span class="src-hint">请上传<b>已修改</b>、且与本剧视频<b>逐集匹配</b>的剧本（.txt / .md），用于替换示例稿</span>'
-        : '<button class="src-restore" id="restoreScript">恢复示例剧本</button>'}
-    </div>
-    <div class="script-scroll" id="scriptScroll">
-      <div class="script-doc">
-        <div class="doc-cover">
-          <div class="doc-kicker">${demo?`剧本定稿 · 台词 ${esc(L.name)} · 非台词中文`:'上传稿 · 原文展示'}</div>
-          <h1 class="doc-cover-title">${esc(state.project.title)}</h1>
-          <div class="doc-sub">全 ${eps.length} 集 · ${demo
-            ? `目标地区 ${esc(regionLabel(state.project.region))} · 台词使用${esc(L.name)}，场景、动作、人名等非台词内容保持中文`
-            : '上传剧本 · 原文展示'}</div>
-          <div class="adapt-chips">${(demo
-            ? (isZh ? ADAPT_TIPS.zh : [`台词 ${L.name}`, '非台词中文', '人名中译', '单集节奏'])
-            : ['原文保留','自动分集','整本导出']).map(t=>`<span>${t}</span>`).join('')}</div>
-        </div>
-        ${eps.map((ep,i)=> episodeHTML(ep,i,lang)).join('')}
-        <div class="doc-end">— 全剧终 —</div>
-      </div>
-    </div>
-  </div>`;
-}
-function bindScript(){
-  const sc = $('#scriptScroll');
-  const tocBody = $('#tocBody');
-  const items = $$('.toc .toc-item');
-  const secs  = $$('.script-ep');
-  let lock = false, lockTimer;
-
-  const setActive = i =>{
-    if(i===state.scriptEp && items[i] && items[i].classList.contains('on')) return;
-    state.scriptEp = i;
-    items.forEach((el,k)=> el.classList.toggle('on', k===i));
-    const el = items[i]; if(!el) return;
-    const r = el.getBoundingClientRect(), br = tocBody.getBoundingClientRect();
-    if(r.top < br.top + 6)            tocBody.scrollTop -= (br.top + 6 - r.top);
-    else if(r.bottom > br.bottom - 6) tocBody.scrollTop += (r.bottom - br.bottom + 6);
-  };
-  const spy = ()=>{
-    if(lock) return;
-    const line = sc.getBoundingClientRect().top + 96;
-    let active = 0;
-    secs.forEach((s,i)=>{ if(s.getBoundingClientRect().top <= line) active = i; });
-    setActive(active);
-  };
-  sc.addEventListener('scroll', spy, {passive:true});
-
-  items.forEach((el,i)=> el.onclick = ()=>{
-    const top = sc.scrollTop + secs[i].getBoundingClientRect().top - sc.getBoundingClientRect().top - 14;
-    sc.scrollTo({top: Math.max(0, top), behavior:'smooth'});
-    setActive(i);
-    lock = true; clearTimeout(lockTimer);
-    lockTimer = setTimeout(()=> lock = false, 700);
-  });
-  const unlock = ()=>{ lock = false; clearTimeout(lockTimer); };
-  sc.addEventListener('wheel', unlock, {passive:true});
-  sc.addEventListener('touchstart', unlock, {passive:true});
-
-  $('#dlBook').onclick = e=>{
-    const lang = regionLang(state.project.region);
-    const src = state.scriptSource || { demo:true };
-    if(!src.demo || lang==='zh'){ downloadScript(false,'target'); return; }
-    const L = SCRIPT_LANGS[lang];
-    openMenu(e.currentTarget, [`中文 + ${L.name}（非台词中文）`, `纯${L.name}剧本`], (_,i)=>
-      downloadScript(false, i===0 ? 'mixed' : 'target'));
-  };
-  $('#uploadScript').onclick = ()=> $('#scriptFile').click();
-  $('#scriptFile').onchange = e=>{
-    const f = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if(f) handleScriptUpload(f);
-  };
-  const restore = $('#restoreScript');
-  if(restore) restore.onclick = ()=>{
-    state.epScripts = EP_SCRIPTS;
-    state.scriptSource = { name:'示例剧本（Demo）', demo:true, at:null };
-    state.scriptEp = 0;
-    renderBody();
-    toast('已恢复示例剧本');
-  };
-  spy();
-}
-function downloadScript(one, mode){
-  const lang = regionLang(state.project.region);
-  const L = SCRIPT_LANGS[lang];
-  const isZh = lang === 'zh';
-  const pure = mode === 'target' && !isZh;   // 纯目标语言：非台词也使用目标语言
-  const src = state.scriptSource || { demo:true };
-  const eps = one ? [state.epScripts[state.scriptEp]] : state.epScripts;
-  const rule = '='.repeat(44);
-  const body = eps.map(ep=>{
-    if(ep.raw) return `第 ${ep.no} 集　${ep.title}\n${'-'.repeat(36)}\n\n${ep.raw}`;
-    if(pure){
-      const pad2 = n=> String(n).padStart(2,'0');
-      const epTag = {
-        en: `EP ${pad2(ep.no)}`, ja: `第 ${pad2(ep.no)} 話`,
-        ko: `제 ${pad2(ep.no)} 화`, es: `EP ${pad2(ep.no)}`,
-      }[lang];
-      const scTag = i => ({
-        en: `SC ${pad2(i+1)}`, ja: `第 ${pad2(i+1)} 場`,
-        ko: `제 ${pad2(i+1)} 장`, es: `ESC ${pad2(i+1)}`,
-      })[lang];
-      const sep = lang === 'ja' ? '：' : ': ';
-      const headLine = `${epTag}　${epTitleI18n(ep, lang)}`;
-      const scenes = ep.scenes.map((sc,i)=>[
-        `${scTag(i)}　${sc.head[lang]}`,
-        '',
-        sc.action[lang],
-        '',
-        sc.lines.map(l=>{
-          const c = SCRIPT_CAST[l.who];
-          return `${c[lang]}${sep}${l.t[lang]}`;
-        }).join('\n\n'),
-      ].join('\n')).join('\n\n');
-      return `${headLine}\n${'-'.repeat(36)}\n\n${scenes}`;
-    }
-    const headLine = `第 ${ep.no} 集　${ep.title}`;
-    /* 混合格式：非台词中文，台词使用目标语言 */
-    const scenes = ep.scenes.map((sc,i)=>[
-      `第 ${i+1} 场　${sc.head.zh}`,
-      '',
-      (sc.actionZh && sc.actionZh[lang]) || sc.action.zh,
-      '',
-      sc.lines.map(l=>{
-        const c = SCRIPT_CAST[l.who];
-        const zhName = (c.zhOf && c.zhOf[lang]) || c.zh;
-        return `${zhName}：${l.t[lang]}`;
-      }).join('\n\n'),
-    ].join('\n')).join('\n\n');
-    return `${headLine}\n${'-'.repeat(36)}\n\n${scenes}`;
-  }).join('\n\n\n');
-  const scriptLabel = src.demo
-    ? (pure ? ({
-        en: `SCREENPLAY · ${L.name}`,
-        ja: `脚本 · ${L.name}`,
-        ko: `시나리오 · ${L.name}`,
-        es: `GUION · ${L.name}`,
-      })[lang]
-            : isZh ? '剧本（中文 · 原生稿）'
-                   : `剧本（台词 ${L.name} · 非台词中文）`)
-    : `剧本原文（上传稿：${src.name}）`;
-  const dispTitle = pure ? projectTitleI18n(state.project.title, lang) : state.project.title;
-  const dateLoc = pure ? ({ en:'en-US', ja:'ja-JP', ko:'ko-KR', es:'es-ES' }[lang] || 'zh-CN') : 'zh-CN';
-  const dateStr = new Date().toLocaleDateString(dateLoc);
-  let metaLine, footer;
-  if(pure){
-    const region = regionI18n(state.project.region, lang);
-    const n = eps.length;
-    metaLine = {
-      en: `TARGET REGION: ${region}  |  ${n} EPISODES  |  ${dateStr}`,
-      ja: `対象地域：${region}　|　全 ${n} 話　|　${dateStr}`,
-      ko: `타깃 지역: ${region}  |  총 ${n}화  |  ${dateStr}`,
-      es: `REGIÓN OBJETIVO: ${region}  |  ${n} EPISODIOS  |  ${dateStr}`,
-    }[lang];
-    footer = {
-      en: 'Generated by Baidu Yijing · Short Drama Restyle Agent',
-      ja: 'Baidu Yijing · ショートドラマ転写エージェント 生成',
-      ko: 'Baidu Yijing · 숏드라마 리스타일 에이전트 생성',
-      es: 'Generado por Baidu Yijing · Agente de Restilización de Series Cortas',
-    }[lang];
-  }else{
-    metaLine = `目标地区：${regionLabel(state.project.region)}　|　共 ${eps.length} 集　|　${dateStr}`;
-    footer = '百度一镜 · 短剧转绘 Agent 生成';
-  }
-  const meta = `${dispTitle}　${scriptLabel}\n${metaLine}\n${rule}\n\n`;
-  const text = meta + body + `\n\n${rule}\n${footer}`;
-  const blob = new Blob(['\ufeff' + text], {type:'text/plain;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = src.demo
-    ? (pure ? `${dispTitle}_${L.name}_剧本.txt`
-            : isZh ? `${state.project.title}_中文剧本.txt`
-                   : `${state.project.title}_${L.name}台词_中文调度_剧本.txt`)
-    : `${state.project.title}_上传稿_剧本.txt`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=> URL.revokeObjectURL(url), 1000);
-  const kind = src.demo ? (pure ? `纯${L.name}` : isZh ? '中文' : `${L.name}台词·中文调度`) : '上传稿';
-  toast(one ? `已下载第 ${eps[0].no} 集${kind}剧本` : `已下载整本${kind}剧本（${eps.length} 集）`);
-}
 /* ===================== 右侧工作面板 ===================== */
-const PTABS = [{k:'asset',l:'资产'},{k:'shot',l:'分镜'},{k:'film',l:'成片'}];
 function panelHTML(){
   const inner = state.stage==='asset' ? assetHTML()
               : state.stage==='shot'  ? shotHTML()
               : filmHTML();
   return `<div class="panel">
-    <div class="ptabs">${PTABS.map(t=>`<button data-k="${t.k}" class="${state.stage===t.k?'on':''}">${t.l}</button>`).join('')}</div>
     <div class="pbodywrap" id="pbodywrap">${inner}</div>
   </div>`;
 }
 function bindPanel(){
-  $$('.ptabs button').forEach(b=> b.onclick=()=>{ state.stage=b.dataset.k; render(); });
   if(state.stage==='asset') bindAsset();
   else if(state.stage==='shot') bindShot();
   else bindFilm();
@@ -1338,11 +1026,11 @@ function shotHTML(){
       <span class="shotc-no">${i+1}</span>${d?'':'<span class="shotc-wait">待转绘</span>'}<span class="shotc-dur">${s.dur}</span>
     </div>`;
   }).join('');
-  const seqTools = state.shotBatch
+  const seqTools = `<button class="aghost" id="exportShots">⬇ 导出</button>${state.shotBatch
     ? `<label class="selall"><input type="checkbox" id="shotSelAll">全选</label>
        <button class="aghost" id="shotBatchCancel">取消</button>
        <button class="aprimary" id="shotBatchGo">转绘所选 (${state.shotSel.size})</button>`
-    : `<button class="aprimary" id="shotBatchStart">批量转绘</button>`;
+    : `<button class="aprimary" id="shotBatchStart">批量转绘</button>`}`;
   return `
     <div class="sb-seq">
       <div class="sb-seq-head">
@@ -1433,6 +1121,8 @@ function openExportDialog(){
   };
 }
 function bindShot(){
+  const exportBtn = $('#exportShots');
+  if(exportBtn) exportBtn.onclick = openExportDialog;
   $$('#strip .shotc').forEach(el=> el.onclick=()=>{
     const i = +el.dataset.i;
     if(state.shotBatch){
