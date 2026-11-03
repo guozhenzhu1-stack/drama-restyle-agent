@@ -699,6 +699,8 @@ const state = {
   stage:"clips",                          // clips | asset | shot | film
   maxStage:0,                             // 已推进到的最远环节：0 原片 1 资产 2 分镜 3 成片
   assetTab:"character",                   // character | scene | prop
+  assetLibTab:"character",                // 项目资产页：character | scene | prop | video | other
+  assetLibDetail:null,                    // 项目资产详情：{cat, id} | null
   clips: CLIPS.map(x=>({...x})),
   clipSource: "demo",                     // demo | pan（百度网盘导入）
   episodes: EPISODES,

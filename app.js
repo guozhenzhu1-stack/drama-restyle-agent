@@ -67,8 +67,11 @@ function renderNav(){
 /* ---- 顶层渲染 ---- */
 function render(){
   renderNav();
-  document.querySelector('.app').classList.toggle('no-sidebar', state.screen==='project');
-  state.screen==='landing' ? renderLanding() : renderProject();
+  const full = state.screen==='project' || state.screen==='assets';
+  document.querySelector('.app').classList.toggle('no-sidebar', full);
+  if(state.screen==='landing') renderLanding();
+  else if(state.screen==='assets') renderAssets();
+  else renderProject();
 }
 /* ===================== 落地页（入口） ===================== */
 function renderLanding(){
@@ -276,7 +279,167 @@ function bindTopbar(){
   const p = state.project;
   $('#back').onclick = ()=>{ state.screen='landing'; render(); };
   $('#title').onchange = e=> p.title = e.target.value || p.title;
-  $('#assetBtn').onclick = ()=> selectStage('asset');
+  $('#assetBtn').onclick = ()=>{
+    state.assetLibTab = 'character';
+    state.assetLibDetail = null;
+    state.screen = 'assets';
+    render();
+  };
+}
+
+/* ---- 项目资产库 ---- */
+const ALIB_TABS = [
+  {k:'character', l:'角色'},
+  {k:'scene', l:'场景'},
+  {k:'prop', l:'道具'},
+  {k:'video', l:'视频'},
+  {k:'other', l:'未分类'},
+];
+function charLib(a){
+  const main = assetIsDone(a);
+  const looks = (a.looks || []).filter(lk=> lookDoneOf(a, lk));
+  const items = [];
+  if(main) items.push({id:a.id, name:'角色主图', image:assetImage(a, 'character', 'new'), kind:'main'});
+  looks.forEach(lk=> items.push({id:lk.id, name:lk.name, image:assetImage(lk, 'character', 'new'), kind:'look'}));
+  return {
+    a, main, looks, items,
+    cover: looks.length ? assetImage(looks[0], 'character', 'new')
+         : main ? assetImage(a, 'character', 'new') : null,
+  };
+}
+function libCharacters(){
+  return state.assets.character.map(charLib).filter(x=> x.items.length);
+}
+function libSimple(cat){
+  return state.assets[cat].filter(assetIsDone).map(a=>({a, image:assetImage(a, cat, 'new')}));
+}
+function libVideos(){
+  return state.shots.map((s,i)=>({s, i})).filter(x=> x.s.done);
+}
+function libEmptyHTML(k){
+  const label = (ALIB_TABS.find(t=>t.k===k)||{}).l || '资产';
+  return `<div class="alib-empty">还没有已生成的${label}资产<span>完成生成后会自动出现在项目资产中</span></div>`;
+}
+function libCardHTML(k, item){
+  if(k==='character'){
+    const badge = item.looks.length ? `${item.looks.length} 造型` : '主图';
+    return `<button class="alib-card" data-lib-cat="character" data-lib-id="${item.a.id}" title="查看${esc(item.a.name)}">
+      <span class="alib-cover"><img src="${esc(item.cover)}" alt="${esc(item.a.name)}"><span class="alib-badge">${badge}</span></span>
+      <span class="alib-name">${esc(item.a.name)}</span>
+    </button>`;
+  }
+  if(k==='video'){
+    return `<button class="alib-card" data-lib-cat="video" data-lib-idx="${item.i}" title="查看分镜 ${item.i+1}">
+      <span class="alib-cover"><img src="${drawScene(item.s.scene, 'new', state.project.style)}" alt="分镜 ${item.i+1}"><span class="alib-badge">${esc(item.s.dur)}</span></span>
+      <span class="alib-name">分镜 ${String(item.i+1).padStart(2,'0')}</span>
+    </button>`;
+  }
+  return `<button class="alib-card" data-lib-cat="${k}" data-lib-id="${item.a.id}" title="查看${esc(item.a.name)}">
+    <span class="alib-cover"><img src="${esc(item.image)}" alt="${esc(item.a.name)}"><span class="alib-badge">${ASSET_LABEL[k]}</span></span>
+    <span class="alib-name">${esc(item.a.name)}</span>
+  </button>`;
+}
+function renderAssets(){
+  if(state.assetLibDetail){ renderAssetDetail(); return; }
+  const tab = ALIB_TABS.some(t=>t.k===state.assetLibTab) ? state.assetLibTab : 'character';
+  state.assetLibTab = tab;
+  let cards = '';
+  if(tab==='character') cards = libCharacters().map(x=>libCardHTML('character', x)).join('');
+  else if(tab==='video') cards = libVideos().map(x=>libCardHTML('video', x)).join('');
+  else if(tab!=='other') cards = libSimple(tab).map(x=>libCardHTML(tab, x)).join('');
+  $('#main').innerHTML = `<div class="alib">
+    <div class="alib-head">
+      <button class="alib-back" id="alibBack" title="返回项目">‹</button>
+      <h1>项目资产</h1>
+    </div>
+    <div class="alib-tabs">
+      ${ALIB_TABS.map(t=>`<button data-lib-tab="${t.k}" class="${tab===t.k?'on':''}">${t.l}</button>`).join('')}
+    </div>
+    <div class="alib-body">
+      ${cards ? `<div class="alib-grid ${tab!=='character'?'is-wide':''}">${cards}</div>` : libEmptyHTML(tab)}
+    </div>
+  </div>`;
+  bindAssetLibrary();
+}
+function renderAssetDetail(){
+  const d = state.assetLibDetail;
+  if(!d){ renderAssets(); return; }
+  if(d.cat==='character'){ renderCharacterAsset(d.id); return; }
+  if(d.cat==='scene' || d.cat==='prop'){ renderSimpleAsset(d.cat, d.id); return; }
+  state.assetLibDetail = null;
+  renderAssets();
+}
+function renderCharacterAsset(id){
+  const a = state.assets.character.find(x=>x.id===id);
+  if(!a){ state.assetLibDetail = null; renderAssets(); return; }
+  const lib = charLib(a);
+  if(!lib.items.length){ state.assetLibDetail = null; renderAssets(); return; }
+  const looks = lib.looks.map(lk=>`<figure class="alib-look">
+    <div class="alib-look-img"><img src="${assetImage(lk, 'character', 'new')}" alt="${esc(lk.name)}"></div>
+    <figcaption>${esc(a.name)}·${esc(lk.name)}</figcaption>
+  </figure>`).join('');
+  const main = lib.main ? `<figure class="alib-look">
+    <div class="alib-look-img"><img src="${assetImage(a, 'character', 'new')}" alt="角色主图"></div>
+    <figcaption>${esc(a.name)}·角色主图</figcaption>
+  </figure>` : '';
+  $('#main').innerHTML = `<div class="alib alib-detail">
+    <div class="alib-head">
+      <button class="alib-back" id="alibBack" title="返回项目资产">‹</button>
+      <h1>${esc(a.name)}</h1>
+    </div>
+    <div class="alib-detail-body">
+      ${looks ? `<h2 class="alib-sec-title">造型 (${lib.looks.length})</h2><div class="alib-look-grid">${looks}</div>` : ''}
+      ${main ? `<h2 class="alib-sec-title">角色主图</h2><div class="alib-look-grid">${main}</div>` : ''}
+      <h2 class="alib-sec-title">音色</h2>
+      <div class="alib-voice">
+        <span class="alib-voice-tag">当前使用</span>
+        <p>${esc(a.voice || '自然音色')}，语速中等，情绪表达贴合角色，保留原片表演节奏。</p>
+        <div class="alib-voice-foot">文本音色</div>
+      </div>
+      <div class="alib-voice-name">${esc(a.name)}·原声</div>
+    </div>
+  </div>`;
+  bindAssetLibrary();
+}
+function renderSimpleAsset(cat, id){
+  const a = state.assets[cat].find(x=>x.id===id);
+  if(!a || !assetIsDone(a)){ state.assetLibDetail = null; renderAssets(); return; }
+  $('#main').innerHTML = `<div class="alib alib-detail">
+    <div class="alib-head">
+      <button class="alib-back" id="alibBack" title="返回项目资产">‹</button>
+      <h1>${esc(a.name)}</h1>
+    </div>
+    <div class="alib-detail-body">
+      <h2 class="alib-sec-title">${ASSET_LABEL[cat]}图</h2>
+      <div class="alib-simple-detail"><img src="${assetImage(a, cat, 'new')}" alt="${esc(a.name)}"></div>
+      <h2 class="alib-sec-title">转绘提示词</h2>
+      <div class="alib-prompt">${esc(a.prompt)}</div>
+    </div>
+  </div>`;
+  bindAssetLibrary();
+}
+function bindAssetLibrary(){
+  const back = $('#alibBack');
+  if(back) back.onclick = ()=>{
+    if(state.assetLibDetail){ state.assetLibDetail = null; renderAssets(); }
+    else { state.screen = 'project'; render(); }
+  };
+  $$('[data-lib-tab]').forEach(b=> b.onclick = ()=>{
+    state.assetLibTab = b.dataset.libTab;
+    state.assetLibDetail = null;
+    renderAssets();
+  });
+  $$('[data-lib-cat]').forEach(card=> card.onclick = ()=>{
+    const cat = card.dataset.libCat;
+    if(cat==='video'){
+      const i = +card.dataset.libIdx;
+      const s = state.shots[i];
+      if(s) openImageZoom(drawScene(s.scene, 'new', state.project.style), `分镜 ${String(i+1).padStart(2,'0')}`);
+      return;
+    }
+    state.assetLibDetail = {cat, id:card.dataset.libId};
+    renderAssets();
+  });
 }
 /* ---- 工作台主体 ---- */
 function renderBody(){
