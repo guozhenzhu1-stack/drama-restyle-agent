@@ -242,12 +242,15 @@ button{font-family:inherit}
 .aimg img{width:100%;height:100%;object-fit:cover}
 .aimg.empty{color:var(--text-4);font-size:13px}
 .acol{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
-.arow-top{display:flex;align-items:center;gap:8px}
+.arow-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .arow-top b{font-size:15px}
 .atag{font-size:11px;color:var(--text-3);background:var(--surface-2);padding:2px 8px;border-radius:6px}
 .atag.role-f{color:#d4537a;background:#fdeef3}
 .atag.role-m{color:#3f6fd8;background:#edf2ff}
 .arow-count{margin-left:auto;font-size:11px;color:var(--text-4)}
+.arow-ops{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.arow-ops button{display:inline-flex;align-items:center;gap:3px;font-family:inherit;font-size:11.5px;line-height:1;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:6px 9px;cursor:pointer;white-space:nowrap;transition:.15s}
+.arow-ops button:hover{color:var(--accent);border-color:var(--brand);background:var(--brand-soft)}
 .arow-lookcard{display:block;padding:16px 18px}
 .arow-lookcard .acol{gap:10px}
 .aref-chip{font-size:12px;color:var(--accent);background:var(--brand-soft);padding:2px 8px;border-radius:6px}
@@ -310,6 +313,28 @@ button{font-family:inherit}
 .cmp-pair.wide img{aspect-ratio:16/9}
 .cmp-pair figcaption{padding:8px 10px;text-align:center;font-size:12px;color:var(--text-3);border-top:1px solid var(--border)}
 .cmp-pair figure:last-child figcaption{color:var(--accent);font-weight:600}
+/* ---- 项目资产选择 ---- */
+.asset-picker{width:min(820px,94vw);max-height:88vh;display:flex;flex-direction:column}
+.modal:has(.asset-picker){max-width:min(820px,94vw);overflow:hidden}
+.picker-title{display:flex;align-items:baseline;gap:10px;min-width:0}
+.picker-sub{font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.picker-body{flex:1;min-height:0;overflow:auto;padding:16px;background:var(--surface-2)}
+.pick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.pick-card{position:relative;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden;cursor:pointer;text-align:left;transition:.15s}
+.pick-card:hover{border-color:var(--border-2);box-shadow:var(--shadow-1)}
+.pick-card:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.pick-card.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+.pick-card img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;background:#eef1f7}
+.pick-card.wide img{aspect-ratio:16/9}
+.pick-chk{position:absolute;left:8px;top:8px;z-index:2;width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,.94);border:1px solid var(--border-2);display:grid;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.pick-chk input{width:14px;height:14px;margin:0;accent-color:var(--accent);pointer-events:none}
+.pick-meta{display:flex;flex-direction:column;gap:2px;min-width:0;padding:7px 9px 8px}
+.pick-name{font-size:12px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick-kind{font-size:10.5px;color:var(--text-4)}
+.picker-foot{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--border);background:var(--surface)}
+.picker-hint{margin-right:auto;font-size:12px;color:var(--text-3);min-width:0}
+.picker-empty{grid-column:1/-1;padding:42px 10px;text-align:center;font-size:13px;color:var(--text-4)}
+@media (max-width:720px){.pick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .cmp-video{position:relative;background:#0c0d13}
 .cmp-play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;display:grid;place-items:center;padding-left:3px;background:rgba(15,17,28,.58);color:#fff;font-size:16px;backdrop-filter:blur(4px)}
 /* ---- 导出弹窗 ---- */

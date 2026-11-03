@@ -707,7 +707,8 @@ const state = {
   activeEp: 0,
   scriptEp: 0,                            // 剧本本土化当前集
   assets: JSON.parse(JSON.stringify(ASSETS)),
-  assetDone: {},                          // id -> true 已生成（整项资产/角色全部妆造）
+  assetDone: {},                          // id -> true 已生成（整项资产/角色主图）
+  assetCustom: {},                        // id -> dataURL 本地上传或从项目资产选用的资产图
   lookDone: {},                           // lookId -> true 已生成（单套妆造）
   lookGenerating: new Set(),               // lookId -> 生成中
   assetBatch: false,                      // 批量生成选择模式

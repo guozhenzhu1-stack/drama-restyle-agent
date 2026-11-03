@@ -538,28 +538,50 @@ function assetCat(id){
   return ['character','scene','prop'].find(k=> state.assets[k].some(a=>a.id===id));
 }
 function assetImage(a, cat, mode){
+  if(mode==='new' && a && state.assetCustom[a.id]) return state.assetCustom[a.id];
   const style = state.project.style;
   return cat==='character' ? portraitSVG(a.scene, mode, style)
        : cat==='prop'      ? propSVG(a.scene, mode, style)
        : drawScene(a.scene, mode, style);
 }
-function assetThumb(a){
+function assetIsDone(a){
+  return !!(a && (a.pre || state.assetDone[a.id] || state.assetCustom[a.id]));
+}
+function assetThumb(a, cat=state.assetTab, allowBatch=true){
   const g = state.generating.has(a.id);
-  const done = a.pre || state.assetDone[a.id];
-  const chk = state.assetBatch
+  const done = assetIsDone(a);
+  const chk = state.assetBatch && allowBatch
     ? `<label class="aimg-chk" title="勾选后可批量生成"><input type="checkbox" class="achk" data-sel="${a.id}" ${state.assetSel.has(a.id)?'checked':''}></label>`
     : '';
   if(g) return `<div class="aimg skeleton"><span class="spin"></span>${chk}</div>`;
   if(!done) return `<div class="aimg empty">待生成${chk}</div>`;
-  return `<div class="aimg"><img src="${assetImage(a, state.assetTab, 'new')}" alt="">
+  return `<div class="aimg"><img src="${assetImage(a, cat, 'new')}" alt="">
     ${chk}<span class="aimg-cmp">对比</span>
   </div>`;
 }
-/* 角色妆造：同一角色的多套造型，纵向排列并展示 Prompt */
-function lookDoneOf(a, lk){ return !!(a.pre || state.assetDone[a.id] || state.lookDone[lk.id]); }
-function looksAllDone(a){
-  return !!(a.looks && a.looks.length && a.looks.every(lk=> lookDoneOf(a, lk)));
+function assetOpsHTML(id){
+  return `<span class="arow-ops">
+    <button type="button" data-upload-asset="${id}" title="从本地上传资产图">⬆ 本地上传</button>
+    <button type="button" data-pick-asset="${id}" title="从项目资产中选择资产图">▦ 项目资产</button>
+  </span>`;
 }
+function assetPromptBoxHTML(a){
+  const done = assetIsDone(a);
+  return `<div class="look-box">
+    <textarea class="aprompt" data-id="${a.id}">${esc(a.prompt)}</textarea>
+    <div class="look-tools">
+      <span class="look-refs" title="参考图">
+        ${(a.refs || []).map(src=>`<img src="${esc(src)}" alt="参考图" title="点击放大查看">`).join('')}
+      </span>
+      <button class="look-link" data-ref="${a.id}">⬆ 上传参考图</button>
+      <span class="look-flex"></span>
+      <button class="look-gen" data-gen="${a.id}">${done?'重新生成':'生成图片'}</button>
+    </div>
+  </div>`;
+}
+
+/* 角色妆造：同一角色的多套造型，纵向排列并展示 Prompt */
+function lookDoneOf(a, lk){ return !!(a.pre || state.lookDone[lk.id]); }
 function lookStripHTML(a){
   if(!a.looks || !a.looks.length) return '';
   const rows = a.looks.map(lk=>{
@@ -609,32 +631,34 @@ function assetHTML(){
   const rows = list.map(a=>{
     const lookCard = state.assetTab==='character' && a.looks && a.looks.length;
     if(lookCard){
-      return `<div class="arow arow-lookcard" data-id="${a.id}">
+      const main = `<div class="arow" data-id="${a.id}">
+        ${assetThumb(a, 'character', false)}
         <div class="acol">
           <div class="arow-top"><b>${esc(a.name)}</b>${roles(a)}
+            <span class="aref-chip">角色主图</span>
+            ${assetOpsHTML(a.id)}
+          </div>
+          ${assetPromptBoxHTML(a)}
+        </div>
+      </div>`;
+      const looks = `<div class="arow arow-lookcard" data-id="${a.id}">
+        <div class="acol">
+          <div class="arow-top"><b>${esc(a.name)} · 角色妆造</b>
             <span class="arow-count">${a.looks.length} 套妆造</span>
           </div>
           ${lookStripHTML(a)}
         </div>
       </div>`;
+      return main + looks;
     }
-    const done = a.pre || state.assetDone[a.id];
     return `<div class="arow" data-id="${a.id}">
-      ${assetThumb(a)}
+      ${assetThumb(a, state.assetTab)}
       <div class="acol">
         <div class="arow-top"><b>${esc(a.name)}</b>${roles(a)}
-          ${a.ref?`<span class="aref-chip">${esc(a.ref)}</span>`:''}</div>
-        <div class="look-box">
-          <textarea class="aprompt" data-id="${a.id}">${esc(a.prompt)}</textarea>
-          <div class="look-tools">
-            <span class="look-refs" title="参考图">
-              ${(a.refs || []).map(src=>`<img src="${esc(src)}" alt="参考图" title="点击放大查看">`).join('')}
-            </span>
-            <button class="look-link" data-ref="${a.id}">⬆ 上传参考图</button>
-            <span class="look-flex"></span>
-            <button class="look-gen" data-gen="${a.id}">${done?'重新生成':'生成图片'}</button>
-          </div>
+          ${a.ref?`<span class="aref-chip">${esc(a.ref)}</span>`:''}
+          ${assetOpsHTML(a.id)}
         </div>
+        ${assetPromptBoxHTML(a)}
       </div>
     </div>`;
   }).join('');
@@ -655,6 +679,7 @@ function assetHTML(){
 }
 function genAsset(id){
   if(state.generating.has(id)) return;
+  delete state.assetCustom[id];
   state.generating.add(id); renderBody();
   setTimeout(()=>{ state.generating.delete(id); state.assetDone[id]=true; renderBody(); toast('资产已生成'); }, 900);
 }
@@ -708,18 +733,106 @@ function batchGenerate(){
   }, i*180));
   toast(`已开始批量生成 ${jobs.length} ${state.assetTab==='character'?'套妆造':'个资产'}`);
 }
+/* ---- 资产图本地上传 / 项目资产选择 ---- */
+function projectAssetItems(cat){
+  if(cat==='character'){
+    const out = [];
+    state.assets.character.forEach(a=>{
+      out.push({id:a.id, name:a.name, kind:'角色主图', url:assetImage(a, 'character', 'new')});
+      (a.looks || []).forEach(lk=> out.push({
+        id:lk.id, name:`${a.name} · ${lk.name}`, kind:'角色妆造', url:assetImage(lk, 'character', 'new')
+      }));
+    });
+    return out;
+  }
+  return state.assets[cat].map(a=>({id:a.id, name:a.name, kind:ASSET_LABEL[cat], url:assetImage(a, cat, 'new')}));
+}
+function applyAssetImage(id, url, source, fromName){
+  const cat = assetCat(id); if(!cat) return;
+  const a = state.assets[cat].find(x=>x.id===id); if(!a) return;
+  state.assetCustom[id] = url;
+  renderBody();
+  toast(source==='pick' ? `已使用项目资产图：${fromName || a.name}` : `已上传「${a.name}」资产图`);
+}
+function pickAssetImage(cb){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.style.display = 'none';
+  inp.onchange = ()=>{
+    const file = inp.files && inp.files[0];
+    inp.remove();
+    if(!file || !file.type.startsWith('image/')){ if(file) toast('请选择图片文件'); return; }
+    const r = new FileReader();
+    r.onload = ()=> cb(r.result);
+    r.onerror = ()=> toast('图片读取失败');
+    r.readAsDataURL(file);
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+function openAssetPicker(targetId){
+  const cat = assetCat(targetId); if(!cat) return;
+  const target = state.assets[cat].find(x=>x.id===targetId); if(!target) return;
+  const items = projectAssetItems(cat).filter(it=> it.id!==targetId);
+  let picked = null;
+  modal(`<div class="asset-picker">
+    <div class="player-head">
+      <div class="picker-title"><b>从项目资产选择</b><span class="picker-sub">${ASSET_LABEL[cat]} · ${esc(target.name)}</span></div>
+      <button onclick="closeModal()">✕</button>
+    </div>
+    <div class="picker-body">
+      ${items.length ? `<div class="pick-grid">${items.map(it=>`
+        <div class="pick-card ${cat!=='character'?'wide':''}" role="button" tabindex="0" data-pick="${it.id}" title="${esc(it.name)}">
+          <span class="pick-chk"><input type="checkbox" tabindex="-1" aria-hidden="true"></span>
+          <img src="${esc(it.url)}" alt="${esc(it.name)}">
+          <span class="pick-meta"><span class="pick-name">${esc(it.name)}</span><span class="pick-kind">${it.kind}</span></span>
+        </div>`).join('')}</div>` : '<div class="picker-empty">当前分类暂无其他项目资产</div>'}
+    </div>
+    <div class="picker-foot">
+      <span class="picker-hint">勾选 1 张图片作为「${esc(target.name)}」的资产图</span>
+      <button class="aghost" onclick="closeModal()">取消</button>
+      <button class="aprimary" id="pickConfirm" disabled>使用该资产图</button>
+    </div>
+  </div>`);
+  const cards = $$('.pick-card');
+  const confirm = $('#pickConfirm');
+  const select = card=>{
+    const same = card.classList.contains('on');
+    cards.forEach(c=>{
+      c.classList.remove('on');
+      const inp = c.querySelector('input'); if(inp) inp.checked = false;
+    });
+    picked = null;
+    if(!same){
+      card.classList.add('on');
+      const inp = card.querySelector('input'); if(inp) inp.checked = true;
+      picked = card.dataset.pick;
+    }
+    confirm.disabled = !picked;
+  };
+  cards.forEach(card=>{
+    card.onclick = ()=> select(card);
+    card.onkeydown = e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); select(card); } };
+  });
+  confirm.onclick = ()=>{
+    if(!picked) return;
+    const item = items.find(it=> it.id===picked); if(!item) return;
+    closeModal();
+    applyAssetImage(targetId, item.url, 'pick', item.name);
+  };
+}
 /* ---- 转绘前后对比 ---- */
 function openCompare(id, lookId){
   const cat = assetCat(id); if(!cat) return;
   const a = state.assets[cat].find(x=>x.id===id);
   const look = lookId && a.looks ? a.looks.find(l=>l.id===lookId) : null;
   const item = look || a;
-  const done = !!(a.pre || state.assetDone[id] || (look ? state.lookDone[look.id] : looksAllDone(a)));
+  const done = look ? lookDoneOf(a, look) : assetIsDone(a);
   if(!done){ toast('请先生成该资产的转绘图'); return; }
   const before = assetImage(item, cat, 'orig');
   const after  = assetImage(item, cat, 'new');
   const name = a.name;
-  const kind = look ? '角色妆造' : ASSET_LABEL[cat];
+  const kind = look ? '角色妆造' : cat==='character' ? '角色主图' : ASSET_LABEL[cat];
   modal(`<div class="compare">
     <div class="player-head"><b>${esc(name)} · 转绘前后对比</b><button onclick="closeModal()">✕</button></div>
     <div class="cmp-pair ${cat==='scene'?'wide':''}">
@@ -863,14 +976,14 @@ function buildAssetXlsx(){
     const looks = (a.looks && a.looks.length) ? a.looks : [{ id:a.id, name:'默认造型', prompt:a.prompt }];
     const hasLooks = !!(a.looks && a.looks.length);
     looks.forEach(lk=>{
-      const done = a.pre || state.assetDone[a.id] || (hasLooks && state.lookDone[lk.id]);
+      const done = a.pre || (hasLooks ? state.lookDone[lk.id] : assetIsDone(a));
       charRows.push([locName(a), a.name, a.role || '', lk.name, lk.prompt, done ? '已生成' : '待生成']);
     });
   });
   const simpleRows = (list, label)=>[
     [label, '转绘提示词', '状态'],
     ...list.map(a=>{
-      const done = a.pre || state.assetDone[a.id];
+      const done = assetIsDone(a);
       return [a.name, a.prompt, done ? '已生成' : '待生成'];
     }),
   ];
@@ -961,6 +1074,14 @@ function bindAsset(){
   });
   $$('[data-cmp-look]').forEach(b=> b.onclick=()=> openCompare(b.dataset.owner, b.dataset.cmpLook));
   $$('[data-gen-look]').forEach(b=> b.onclick=()=> genLook(b.dataset.owner, b.dataset.genLook));
+  $$('button[data-upload-asset]').forEach(b=> b.onclick= e=>{
+    e.stopPropagation();
+    pickAssetImage(url=> applyAssetImage(b.dataset.uploadAsset, url, 'upload'));
+  });
+  $$('button[data-pick-asset]').forEach(b=> b.onclick= e=>{
+    e.stopPropagation();
+    openAssetPicker(b.dataset.pickAsset);
+  });
   $$('.look-prompt').forEach(t=> t.onchange=()=>{
     const owner = state.assets.character.find(x=>x.id===t.dataset.owner);
     const lk = owner && owner.looks && owner.looks.find(l=>l.id===t.dataset.look);
