@@ -1284,17 +1284,24 @@ function segHTML(seg){
 function shotHTML(){
   const sh = state.shots[state.activeShot] || state.shots[0];
   const gen  = state.generating.has(sh.id);
-  const frame = gen ? '' : sh.done
-    ? drawScene(sh.scene,'new',state.project.style)
-    : shotPlaceholderSVG();
-  const main = gen
+  const status = gen ? '生成中' : sh.done ? '已转绘' : '待转绘';
+  const beforeFrame = drawScene(sh.scene,'orig');
+  const afterFrame = sh.done ? drawScene(sh.scene,'new',state.project.style) : shotPlaceholderSVG();
+  const afterMain = gen
     ? `<div class="sb-view skeleton"><span class="spin"></span></div>`
     : sh.done
-      ? `<img class="sb-bg" src="${frame}" alt="">
-         <div class="sb-view"><img src="${frame}" alt=""><span class="sb-tag new">转绘后</span>
-           <button class="sb-cmp" data-cmp-shot="${state.activeShot}" title="查看原片与转绘效果对比">对比</button>
-         </div>`
-      : `<div class="sb-view"><img src="${frame}" alt="待转绘占位图"></div>`;
+      ? `<div class="sb-view"><img src="${afterFrame}" alt="转绘后"></div>`
+      : `<div class="sb-view"><img src="${afterFrame}" alt="待转绘占位图"></div>`;
+  const main = `<div class="sb-pair">
+    <div class="sb-side">
+      <div class="sb-side-head"><b>转绘前</b><span>原片</span></div>
+      <div class="sb-player"><div class="sb-view"><img src="${beforeFrame}" alt="转绘前"></div></div>
+    </div>
+    <div class="sb-side">
+      <div class="sb-side-head"><b>转绘后</b></div>
+      <div class="sb-player">${afterMain}</div>
+    </div>
+  </div>`;
   const ep = state.episodes[state.activeEp];
   const doneCount = state.shots.filter(s=>s.done).length;
   const strip = state.shots.map((s,i)=>{
@@ -1309,7 +1316,6 @@ function shotHTML(){
       <span class="shotc-no">${i+1}</span>${d?'':'<span class="shotc-wait">待转绘</span>'}<span class="shotc-dur">${s.dur}</span>
     </div>`;
   }).join('');
-  const status = gen ? '生成中' : sh.done ? '已转绘' : '待转绘';
   const seqTools = state.shotBatch
     ? `<label class="selall"><input type="checkbox" id="shotSelAll">全选</label>
        <button class="aghost" id="shotBatchCancel">取消</button>
@@ -1333,7 +1339,7 @@ function shotHTML(){
           <b>分镜视频</b>
           <span class="sb-state ${sh.done?'ok':''}">${status}</span>
         </div>
-        <div class="sb-player">${main}</div>
+        ${main}
         <div class="sb-video-foot">
           <span>时长 ${sh.dur}</span>
           <span>${esc(styleName(state.project.style))}</span>
@@ -1358,20 +1364,6 @@ function genShot(i){
   const sh = state.shots[i]; if(!sh || state.generating.has(sh.id)) return;
   state.generating.add(sh.id); renderBody();
   setTimeout(()=>{ state.generating.delete(sh.id); sh.done=true; renderBody(); toast('分镜已转绘'); }, 900);
-}
-function openShotCompare(i){
-  const sh = state.shots[i];
-  if(!sh || !sh.done){ toast('请先完成该分镜的转绘'); return; }
-  const before = drawScene(sh.scene,'orig');
-  const after  = drawScene(sh.scene,'new',state.project.style);
-  modal(`<div class="compare">
-    <div class="player-head"><b>分镜 ${i+1} · 视频效果对比</b><button onclick="closeModal()">✕</button></div>
-    <div class="cmp-pair wide">
-      <figure><div class="cmp-video"><img src="${before}" alt="原片"><span class="cmp-play">▶</span></div><figcaption>原片</figcaption></figure>
-      <figure><div class="cmp-video"><img src="${after}" alt="转绘后"><span class="cmp-play">▶</span></div><figcaption>转绘后</figcaption></figure>
-    </div>
-    <div class="player-foot">分镜 ${i+1} · ${esc(sh.dur)} · ${esc(styleName(state.project.style))} · 左右为原片与转绘后视频效果对比</div>
-  </div>`);
 }
 function openExportDialog(){
   const ep = state.episodes[state.activeEp];
@@ -1433,10 +1425,6 @@ function bindShot(){
     const i = +c.dataset.sel;
     c.checked ? state.shotSel.add(i) : state.shotSel.delete(i);
     renderBody();
-  });
-  $$('.sb-cmp').forEach(btn=> btn.onclick = e=>{
-    e.stopPropagation();
-    openShotCompare(+btn.dataset.cmpShot);
   });
   $('#genShot').onclick = ()=> genShot(state.activeShot);
   const batchStart = $('#shotBatchStart');

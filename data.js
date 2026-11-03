@@ -117,7 +117,7 @@ function shotPlaceholderSVG(){
       <path d="M-5 -10 L11 0 L-5 10 Z" fill="#a5aec6"/>
     </g>
     <text x="200" y="166" text-anchor="middle" fill="#939bb3" font-size="14" font-family="sans-serif">分镜视频待转绘</text>
-    <text x="200" y="188" text-anchor="middle" fill="#5e6680" font-size="11" font-family="sans-serif">转绘完成后可查看原片效果对比</text>
+    <text x="200" y="188" text-anchor="middle" fill="#5e6680" font-size="11" font-family="sans-serif">转绘完成后将在此展示转绘后视频</text>
   </svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
