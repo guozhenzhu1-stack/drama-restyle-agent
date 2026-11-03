@@ -106,7 +106,7 @@ function renderLanding(){
           <div class="dropzone" id="drop">
             <div class="dz-ico">${ICON.upload}</div>
             <div class="dz-title">${isRestyle?'上传视频':'上传剧本'}</div>
-            <div class="dz-sub">${isRestyle?'支持上传 mp4 格式，单个大小不超过 100M，最多上传 100 个视频':'支持上传 txt / docx / pdf 文件'}</div>
+            <div class="dz-sub">${isRestyle?'支持上传 mp4 / mov 格式，单个大小不超过 100M，最多上传 100 个视频':'支持上传 txt / docx / pdf 文件'}</div>
           </div>`}
           <textarea class="q-input" id="q" placeholder="输入你的改编想法…">${esc(L.query)}</textarea>
           ${isFilm?'':`<div class="entry-toolbar">
