@@ -386,10 +386,10 @@ function chatMessages(){
     const total = state.shots.length;
     const done = state.shots.filter(s=>s.done).length;
     msgs.push({who:'a', html: done===total
-      ? '分镜已全部转绘完成 🎉，可预览并导出合成成片。'
+      ? '分镜已全部转绘完成 🎉，合成成片已就绪。'
       : `成片预览已就绪，还有 <b>${total-done} 个分镜</b>待完成转绘。`});
     msgs.push({who:'a', card:true, html:stageResultCard('film')});
-    msgs.push({who:'a', html:'点击右侧「导出合成成片」生成最终视频。'});
+    msgs.push({who:'a', html:'合成成片已保留原片 BGM，可在右侧预览最终视频。'});
   }
 
   return msgs;
@@ -1271,37 +1271,29 @@ function bindShot(){
 
 /* ---- 合成成片 ---- */
 function filmHTML(){
-  const done = state.shots.filter(s=>s.done).length;
-  const all  = state.shots.length;
-  const ready = done===all;
-  const strip = state.shots.map((s,i)=>{
-    const img = s.done ? drawScene(s.scene,'new',state.project.style) : drawScene(s.scene,'orig');
-    return `<div class="shotc ${s.done?'done':''}"><img src="${img}" alt=""><span class="shotc-no">${i+1}</span></div>`;
-  }).join('');
   const cover = state.shots.find(s=>s.done) || state.shots[0];
-  return `
-    <div class="film-main">
-      <div class="frame big"><img src="${drawScene(cover.scene,'new',state.project.style)}" alt=""><span class="frame-play">▶</span></div>
-      <div class="film-info">
-        <h3>${esc(state.project.title)}</h3>
-        <p>${styleName(state.project.style)} · ${state.project.ratio} · ${state.project.reso} · ${state.project.modelVideo}</p>
-        <div class="film-prog"><div class="bar"><i style="width:${Math.round(done/all*100)}%"></i></div><span>${done}/${all} 分镜已转绘</span></div>
-        <button class="tb-primary ${ready?'':'off'}" id="doExport">${ready?'导出合成成片':'请先完成全部分镜转绘'}</button>
-      </div>
+  const frame = drawScene(cover.scene, 'new', state.project.style);
+  const bgmFrom = state.clips[0] ? state.clips[0].name : '原片音轨';
+  return `<div class="film-stage">
+    <div class="film-player" id="filmPlayer" role="button" tabindex="0" aria-label="播放合成成片，已迁移原片 BGM" title="播放合成成片">
+      <img src="${frame}" alt="合成成片">
+      <span class="film-player-play" id="filmPlayIcon">▶</span>
+      <span class="film-bgm" title="已迁移原片 BGM：${esc(bgmFrom)}">♪ 原片 BGM</span>
     </div>
-    <div class="filmstrip-head">成片分镜</div>
-    <div class="filmstrip">${strip}</div>`;
+  </div>`;
 }
 function bindFilm(){
-  const b = $('#doExport'); if(!b) return;
-  b.onclick = ()=>{
-    if(b.classList.contains('off')){ toast('还有分镜未转绘'); return; }
-    toast('正在合成成片…');
-    setTimeout(()=> modal(`<div class="player">
-      <div class="player-head"><b>${esc(state.project.title)} · 成片</b><button onclick="closeModal()">✕</button></div>
-      <div class="frame"><img src="${drawScene(state.shots[0].scene,'new',state.project.style)}" alt=""><span class="frame-play">▶</span></div>
-      <div class="player-foot">合成完成 · ${state.project.ratio} · ${state.project.reso}（Demo 占位）</div>
-    </div>`), 900);
+  const player = $('#filmPlayer'); if(!player) return;
+  const icon = $('#filmPlayIcon');
+  const toggle = ()=>{
+    const playing = player.classList.toggle('playing');
+    player.setAttribute('aria-pressed', playing ? 'true' : 'false');
+    if(icon) icon.textContent = playing ? '❚❚' : '▶';
+    toast(playing ? '正在播放合成成片 · 原片 BGM 已迁移' : '已暂停');
+  };
+  player.onclick = toggle;
+  player.onkeydown = e=>{
+    if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggle(); }
   };
 }
 
