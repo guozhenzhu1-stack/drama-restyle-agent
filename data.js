@@ -8,6 +8,7 @@ const MODELS_IMAGE = ["image2.5", "image2.0", "SDXL"];
 const STYLES = [
   { key: "real",    name: "仿真人风格" },
   { key: "cnanime", name: "3D动漫风格" },
+  { key: "anime",   name: "2D动漫风格" },
 ];
 const RATIOS = ["16:9", "9:16", "4:3", "3:4", "21:9", "1:1"];
 const RESOS  = ["720P", "1080P"];
@@ -707,10 +708,15 @@ const SHOTS = [
 /* ---- 可编辑运行态 ---- */
 const state = {
   screen:"landing",                       // landing | project
-  landing:{ tab:"restyle", toggle:"film", videoSource:"local", style:"real", modelVideo:"Minimax H3 MAX", modelImage:"image2.5", region:REGIONS[1], ratio:"16:9", reso:"720P", query:"", panLink:"", panCode:"", panLoading:false },
+  landing:{ tab:"restyle", toggle:"film", videoSource:"local", style:"real", modelVideo:"Minimax H3 MAX", modelImage:"image2.5", region:REGIONS[1], ratio:"16:9", reso:"720P", query:"", panLink:"", panCode:"", panLoading:false, uploads:[] },
   project:{ title:"重生之不再爱了", style:"real", modelVideo:MODELS_VIDEO[0], modelImage:MODELS_IMAGE[0], ratio:"16:9", reso:"720P", region:REGIONS[1] },
   stage:"clips",                          // clips | asset | shot | film
   maxStage:0,                             // 已推进到的最远环节：0 原片 1 资产 2 分镜 3 成片
+  parseStatus:"idle",                     // idle | parsing | done
+  parseProgress:0,                        // 原片解析进度 0-100
+  parseEta:0,                             // 预计剩余秒数
+  parseTimer:null,                        // 模拟解析定时器
+  clipParse:{},                           // 原片 id -> unparsed | parsing | ok | fail
   assetTab:"character",                   // character | scene | prop
   assetLibTab:"character",                // 项目资产页：character | scene | prop | video | other
   assetLibDetail:null,                    // 项目资产详情：{cat, id} | null

@@ -78,6 +78,22 @@ function renderLanding(){
   const L = state.landing;
   const isFilm = L.toggle === 'film';
   const isRestyle = L.toggle === 'restyle';
+  const uploads = Array.isArray(L.uploads) ? L.uploads : [];
+  const isLocalRestyle = isRestyle && L.videoSource !== 'pan';
+  const allUploaded = uploads.length > 0 && uploads.every(u=> u.status === 'done');
+  const canSend = !isRestyle || (isLocalRestyle && allUploaded);
+  const sendHint = canSend ? '创建项目'
+    : L.videoSource==='pan' ? '请先从网盘导入视频'
+    : uploads.length ? '请等待全部视频上传成功' : '请先上传本地视频';
+  const upItem = u=>`<div class="upitem ${u.status}">
+    <span class="upico">🎞</span>
+    <span class="upmain">
+      <span class="upname" title="${esc(u.name)}">${esc(u.name)}</span>
+      <span class="upbar"><i style="width:${u.status==='done'?100:u.progress}%"></i></span>
+      <span class="upmeta">${u.status==='uploading'?`上传中 ${u.progress}%` : u.status==='done' ? `上传成功 · ${u.sizeLabel}` : `上传失败${u.error?' · '+esc(u.error):''}`}</span>
+    </span>
+    <button class="updel" type="button" data-upload-remove="${u.id}" title="移除该视频">✕</button>
+  </div>`;
   $('#main').innerHTML = `
   <div class="landing">
     <div class="hero">
@@ -106,17 +122,28 @@ function renderLanding(){
             </div>
             <div class="pan-hint">提取码选填；Agent 会自动拉取该文件夹内的全部视频文件，并加入「原片管理」</div>
           </div>`:`
-          <div class="dropzone" id="drop">
+          <div class="dropzone ${isLocalRestyle && uploads.length?'has-files':''}" id="drop">
             <div class="dz-ico">${ICON.upload}</div>
             <div class="dz-title">${isRestyle?'上传视频':'上传剧本'}</div>
-            <div class="dz-sub">${isRestyle?'支持上传 mp4 / mov 格式，单个大小不超过 500M，最多上传 100 个视频':'支持上传 txt / docx / pdf 文件'}</div>
-          </div>`}
+            <div class="dz-sub">${isRestyle
+              ? '支持 mp4 / mov 格式，单个大小不超过 500M，单次最多 10 个视频，可继续多次上传'
+              : '支持上传 txt / docx / pdf 文件'}</div>
+          </div>
+          ${isLocalRestyle && uploads.length?`
+          <div class="uplist">
+            ${uploads.map(upItem).join('')}
+            <div class="up-summary ${allUploaded?'ok':''}">
+              ${allUploaded
+                ? `✓ ${uploads.length} 个视频已全部上传成功，可以点击发送`
+                : `已选择 ${uploads.length} 个视频 · 全部上传成功后才可发送`}
+            </div>
+          </div>`:''}`}
           <textarea class="q-input" id="q" placeholder="输入你的改编想法…">${esc(L.query)}</textarea>
           ${isFilm?'':`<div class="entry-toolbar">
             <div class="tool" id="tStyle"><span class="ti">${ICON.wand}</span>${styleName(L.style)}<span class="chev">⌄</span></div>
             <div class="tool" id="tRegion"><span class="ti">${ICON.wand}</span>${esc(L.region)}<span class="chev">⌄</span></div>
             <div class="tool" id="tRatio"><span class="ti">${ICON.monitor}</span><span class="sub" data-r="ratio" title="选择画幅比例">${L.ratio}<span class="chev">⌄</span></span><i class="tsep">|</i><span class="sub" data-r="reso" title="选择分辨率">${L.reso}<span class="chev">⌄</span></span></div>
-            <button class="send-btn" id="go">${ICON.send}</button>
+            <button class="send-btn" id="go" ${canSend?'':'disabled'} title="${sendHint}">${ICON.send}</button>
           </div>`}
         </div>
       </div>
@@ -153,9 +180,26 @@ function bindLanding(){
   });
   $('#q').oninput = e=> L.query = e.target.value;
   const drop = $('#drop');
-  if(drop) drop.onclick = startProject;
+  if(drop){
+    drop.onclick = ()=>{
+      if(L.toggle==='restyle' && L.videoSource==='local') pickLandingVideos();
+      else startProject();
+    };
+    if(L.toggle==='restyle' && L.videoSource==='local'){
+      drop.ondragover = e=>{ e.preventDefault(); drop.classList.add('drag'); };
+      drop.ondragleave = ()=> drop.classList.remove('drag');
+      drop.ondrop = e=>{
+        e.preventDefault(); drop.classList.remove('drag');
+        addLandingVideos([...e.dataTransfer.files]);
+      };
+    }
+  }
+  $$('[data-upload-remove]').forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
+    removeLandingUpload(b.dataset.uploadRemove);
+  });
   const go = $('#go');
-  if(go) go.onclick = startProject;
+  if(go) go.onclick = ()=>{ if(!go.disabled) startProject(true); };
   const panBtn = $('#panImport');
   if(panBtn){
     const panLink = $('#panLink'), panCode = $('#panCode');
@@ -190,10 +234,92 @@ function renderHistory(){
   $$('#hgrid .hcard').forEach(c=> c.onclick=()=> startProject());
 }
 
-function startProject(){
-  if(state.landing.panLoading) return;
-  state.clips = CLIPS.map(x=>({...x}));
-  state.clipSource = 'demo';
+function pickLandingVideos(){
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.mp4,.mov,video/mp4,video/quicktime';
+  inp.multiple = true;
+  inp.onchange = ()=>{
+    const files = [...(inp.files || [])];
+    inp.remove();
+    if(files.length) addLandingVideos(files);
+  };
+  document.body.appendChild(inp);
+  inp.click();
+}
+function uploadSizeLabel(bytes){
+  if(bytes >= 1024*1024*1024) return (bytes/1024/1024/1024).toFixed(1)+'GB';
+  if(bytes >= 1024*1024) return (bytes/1024/1024).toFixed(1)+'MB';
+  return Math.max(1, Math.round(bytes/1024))+'KB';
+}
+function addLandingVideos(files){
+  const L = state.landing;
+  if(!Array.isArray(L.uploads)) L.uploads = [];
+  const picked = files.slice(0, 10);
+  if(files.length > 10) toast('单次最多上传 10 个视频，已选择前 10 个');
+  picked.forEach((file, k)=>{
+    const validType = /\.(mp4|mov)$/i.test(file.name) || /^video\/(mp4|quicktime)$/i.test(file.type);
+    const oversize = file.size > 500*1024*1024;
+    const rec = {
+      id:'up'+Date.now()+'_'+k,
+      name:file.name,
+      sizeLabel:uploadSizeLabel(file.size),
+      progress:0,
+      status: !validType ? 'fail' : oversize ? 'fail' : 'uploading',
+      error: !validType ? '仅支持 mp4 / mov' : oversize ? '超过 500M' : '',
+      timer:null,
+    };
+    L.uploads.push(rec);
+    if(rec.status==='uploading') simulateLandingUpload(rec);
+  });
+  if(picked.some(f=> !/\.(mp4|mov)$/i.test(f.name))) toast('仅支持 mp4 / mov 格式视频');
+  else if(picked.some(f=> f.size > 500*1024*1024)) toast('单个视频不能超过 500M');
+  renderLanding();
+}
+function simulateLandingUpload(rec){
+  rec.status = 'uploading';
+  rec.progress = 0;
+  rec.timer = setInterval(()=>{
+    rec.progress = Math.min(100, rec.progress + 12 + Math.round(Math.random()*16));
+    if(rec.progress >= 100){
+      rec.progress = 100;
+      rec.status = 'done';
+      clearInterval(rec.timer);
+      rec.timer = null;
+      const allDone = state.landing.uploads.every(u=> u.status === 'done');
+      if(allDone) toast('全部视频上传成功，可以点击发送了');
+    }
+    if(state.screen==='landing' && state.landing.toggle==='restyle') renderLanding();
+  }, 180);
+}
+function removeLandingUpload(id){
+  const L = state.landing;
+  const rec = (L.uploads || []).find(u=> u.id === id);
+  if(rec && rec.timer) clearInterval(rec.timer);
+  L.uploads = (L.uploads || []).filter(u=> u.id !== id);
+  renderLanding();
+}
+function startProject(fromSend=false){
+  const L = state.landing;
+  if(L.panLoading) return;
+  const localRestyle = L.toggle==='restyle' && L.videoSource==='local';
+  if(fromSend && localRestyle){
+    const uploads = Array.isArray(L.uploads) ? L.uploads : [];
+    if(!uploads.length){ toast('请先上传本地视频'); return; }
+    if(!uploads.every(u=> u.status==='done')){ toast('请等待全部视频上传成功后再发送'); return; }
+    const scenes = [SC.bedroom, SC.hall, SC.city, SC.corridor, SC.snowHall];
+    state.clips = uploads.map((u,i)=>({
+      id:'c'+Date.now()+i,
+      name:u.name,
+      dur:'00:05',
+      scene:scenes[i % scenes.length],
+      from:'local',
+    }));
+    state.clipSource = 'local';
+  }else{
+    state.clips = CLIPS.map(x=>({...x}));
+    state.clipSource = 'demo';
+  }
   enterProject();
   toast('已创建项目：'+state.project.title);
 }
@@ -203,8 +329,17 @@ function enterProject(){
   state.project.style = L.style; // 入口风格带入项目
   state.project.modelVideo = L.modelVideo; state.project.modelImage = L.modelImage;
   state.project.ratio = L.ratio; state.project.reso = L.reso; state.project.region = L.region;
+  resetParseState();
   state.screen='project'; state.stage='clips'; state.maxStage=0;
   render();
+}
+function resetParseState(){
+  if(state.parseTimer){ clearInterval(state.parseTimer); state.parseTimer = null; }
+  state.parseStatus = 'idle';
+  state.parseProgress = 0;
+  state.parseEta = 0;
+  state.clipParse = {};
+  state.clips.forEach(c=> state.clipParse[c.id] = 'unparsed');
 }
 /* ---- 百度网盘文件夹导入（Demo 模拟拉取） ---- */
 const PAN_CLIPS = [
@@ -277,7 +412,10 @@ function renderProject(){
 }
 function bindTopbar(){
   const p = state.project;
-  $('#back').onclick = ()=>{ state.screen='landing'; render(); };
+  $('#back').onclick = ()=>{
+    if(state.parseTimer){ clearInterval(state.parseTimer); state.parseTimer = null; }
+    state.screen='landing'; render();
+  };
   $('#title').onchange = e=> p.title = e.target.value || p.title;
   $('#assetBtn').onclick = ()=>{
     state.assetLibTab = 'character';
@@ -444,6 +582,7 @@ function bindAssetLibrary(){
 /* ---- 工作台主体 ---- */
 function renderBody(){
   const pb = $('#pbody');
+  if(!pb) return;
   if(state.stage==='clips') pb.innerHTML = chatHTML() + clipsHTML();
   else                      pb.innerHTML = chatHTML() + eplistHTML() + panelHTML();
   bindChat();
@@ -476,6 +615,12 @@ function stageResultCard(k){
     sub = clipN
       ? `${state.clipSource==='pan'?'网盘导入':'本地上传'} · ${esc(first)}${clipN>1?` 等 ${clipN} 个视频`:''}`
       : '暂未导入原片';
+    if(clipN && state.parseStatus !== 'idle'){
+      const pc = parseCounts();
+      sub += state.parseStatus==='parsing'
+        ? ` · 解析中 ${state.parseProgress}%`
+        : ` · 解析成功 ${pc.ok}/${clipN}`;
+    }
   }else if(k==='asset'){
     title = STAGE_LABEL.asset;
     media = `<div class="res-media res-total"><b>${assetN}</b><span>项资产</span></div>`;
@@ -503,21 +648,102 @@ function stageResultCard(k){
     <span class="res-go" aria-hidden="true">›</span>
   </div>`;
 }
+function parseCounts(){
+  const list = state.clips.map(c=> state.clipParse[c.id] || 'unparsed');
+  return {
+    ok: list.filter(x=>x==='ok').length,
+    fail: list.filter(x=>x==='fail').length,
+    parsing: list.filter(x=>x==='parsing').length,
+    unparsed: list.filter(x=>x==='unparsed').length,
+  };
+}
+function fmtEta(sec){
+  const s = Math.max(0, Math.round(sec || 0));
+  return `00:${String(s).padStart(2,'0')}`;
+}
+function scrollChatBottom(){
+  const sc = $('#cscroll');
+  if(sc) sc.scrollTop = sc.scrollHeight;
+}
+const PARSE_SECONDS = 8;
+function startParsing(){
+  if(state.parseStatus !== 'idle') return;
+  state.parseStatus = 'parsing';
+  state.parseProgress = 0;
+  state.parseEta = PARSE_SECONDS;
+  state.clips.forEach(c=> state.clipParse[c.id] = 'unparsed');
+  renderBody();
+  scrollChatBottom();
+  toast('已确认原片，开始解析视频');
+  const started = Date.now();
+  state.parseTimer = setInterval(()=>{
+    const elapsed = Date.now() - started;
+    const pct = Math.min(100, Math.round(elapsed / (PARSE_SECONDS*1000) * 100));
+    state.parseProgress = pct;
+    state.parseEta = Math.max(0, Math.ceil((PARSE_SECONDS*1000 - elapsed) / 1000));
+    const n = state.clips.length || 1;
+    state.clips.forEach((c,i)=>{
+      const end = (i+1) / n * 100;
+      state.clipParse[c.id] = pct >= 100 ? 'ok' : pct >= end ? 'ok' : pct >= i/n*100 ? 'parsing' : 'unparsed';
+    });
+    if(pct >= 100){
+      clearInterval(state.parseTimer);
+      state.parseTimer = null;
+      state.parseStatus = 'done';
+      state.parseProgress = 100;
+      state.parseEta = 0;
+      state.clips.forEach(c=> state.clipParse[c.id] = 'ok');
+      renderBody();
+      scrollChatBottom();
+      toast(`视频解析完成：${state.clips.length} 个成功`);
+    }else{
+      renderBody();
+      scrollChatBottom();
+    }
+  }, 300);
+}
 function chatMessages(){
   const msgs = [];
   const clipN = state.clips.length;
   const max = state.maxStage || 0;
+  const pc = parseCounts();
 
   if(clipN){
-    msgs.push({who:'a', html: state.clipSource==='pan'
+    const clipIntro = state.clipSource==='pan'
       ? `已从百度网盘文件夹拉取 <b>${clipN} 个视频</b>，并加入原片管理。`
-      : max === 0
-        ? `已为你导入 <b>${clipN} 集</b>短剧原片，可在右侧拖拽排序、预览或继续上传。`
-        : `已为你导入 <b>${clipN} 集</b>短剧原片，原片已确认并锁定，仅支持预览查看。`});
+      : state.parseStatus === 'parsing'
+        ? `已为你导入 <b>${clipN} 集</b>短剧原片，原片已确认，正在解析视频。`
+        : state.parseStatus === 'done'
+          ? `已为你导入 <b>${clipN} 集</b>短剧原片，原片已确认并锁定，视频解析已完成。`
+          : max === 0
+            ? `已为你导入 <b>${clipN} 集</b>短剧原片，可在右侧拖拽排序、预览或继续上传。`
+            : `已为你导入 <b>${clipN} 集</b>短剧原片，原片已确认并锁定，仅支持预览查看。`;
+    msgs.push({who:'a', html:clipIntro});
     msgs.push({who:'a', card:true, html:stageResultCard('clips')});
-    msgs.push({who:'a',
-      html: max === 0 ? '确认原片无误后，我会解析剧情，提炼角色、场景与道具资产。' : '原片已确认并锁定，后续仅支持预览查看。',
-      ...(max === 0 ? { action:'确认原片，提炼资产', go:'asset' } : {})});
+    if(max === 0){
+      if(state.parseStatus === 'idle'){
+        msgs.push({who:'a',
+          html:'原片已就绪。确认无误后，我会先解析视频画面、台词与剧情结构；解析完成后可继续提取角色、场景与道具资产。',
+          parse:'确认原片，进行视频解析'});
+      }else if(state.parseStatus === 'parsing'){
+        msgs.push({who:'a', html:`正在解析原片画面、台词与剧情结构…
+          <div class="cparse">
+            <div class="cparse-head"><span class="spin xs"></span><b>视频解析中</b><span>预计剩余 ${fmtEta(state.parseEta)}</span></div>
+            <div class="cparse-bar"><i style="width:${state.parseProgress}%"></i></div>
+            <div class="cparse-meta"><span>${state.parseProgress}%</span><span>已解析 ${pc.ok}/${clipN} 个视频${pc.parsing?` · 正在解析第 ${state.clips.findIndex(c=>state.clipParse[c.id]==='parsing')+1} 个`:''}</span></div>
+          </div>`});
+      }else{
+        msgs.push({who:'a', html:`视频解析完成：<b>${pc.ok} 个成功</b> · ${pc.fail} 个失败 · ${pc.unparsed} 个未解析。
+          <div class="cparse done">
+            <div class="cparse-head"><span class="cparse-check">✓</span><b>原片解析完成</b><span>耗时 ${PARSE_SECONDS} 秒</span></div>
+            <div class="cparse-bar"><i style="width:100%"></i></div>
+            <div class="cparse-meta"><span>100%</span><span>已识别剧情结构与台词语义</span></div>
+          </div>`,
+          action:'提取资产', go:'asset'});
+      }
+    }else{
+      msgs.push({who:'a', html:'原片已确认并锁定，后续仅支持预览查看。'});
+    }
   }else{
     msgs.push({who:'a', html:'暂未导入原片，请上传视频或从百度网盘导入。'});
   }
@@ -562,7 +788,8 @@ function chatHTML(){
   const body = msgs.map(m=>`
     <div class="cmsg ${m.who}${m.card?' cmsg-card':''}">
       <div class="cbubble">${m.html}
-        ${m.action?`<button class="cbtn" data-go="${m.go}">${m.action}</button>`:''}
+        ${m.action?`<button class="cbtn" data-go="${m.go}">${m.action}</button>`
+          : m.parse?`<button class="cbtn cbtn-parse" data-parse="1">${m.parse}</button>`:''}
       </div>
     </div>`).join('');
   return `
@@ -579,7 +806,9 @@ function chatHTML(){
   </div>`;
 }
 function bindChat(){
-  $$('.cbtn').forEach(b=> b.onclick=()=> selectStage(b.dataset.go));
+  $$('.cbtn').forEach(b=>{
+    b.onclick = b.dataset.parse ? startParsing : ()=> selectStage(b.dataset.go);
+  });
   $$('.res-card').forEach(card=>{
     const open = ()=> selectStage(card.dataset.stage);
     card.onclick = open;
@@ -621,27 +850,42 @@ function bindEplist(){
   });
 }
 /* ===================== 原片管理器 ===================== */
-function clipsLocked(){ return (state.maxStage || 0) >= 1; }
+function clipsLocked(){ return (state.maxStage || 0) >= 1 || state.parseStatus !== 'idle'; }
+const PARSE_LABEL = { unparsed:'未解析', parsing:'解析中', ok:'解析成功', fail:'解析失败' };
 function clipsHTML(){
   const locked = clipsLocked();
+  const pc = parseCounts();
   const cards = state.clips.map((c,i)=>{
     const img = drawScene(c.scene, 'orig');
+    const ps = state.clipParse[c.id] || 'unparsed';
+    const psLabel = PARSE_LABEL[ps] || '未解析';
     return `<div class="clipc ${locked?'is-locked':''}" draggable="${locked?'false':'true'}" data-i="${i}">
-      <div class="clip-thumb"><img src="${img}" alt="">${c.from==='pan'?'<span class="clip-src">☁ 网盘</span>':''}<span class="clip-play">▶</span><span class="clip-dur">${c.dur}</span></div>
+      <div class="clip-thumb"><img src="${img}" alt="">${c.from==='pan'?'<span class="clip-src">☁ 网盘</span>':c.from==='local'?'<span class="clip-src">本地</span>':''}<span class="clip-play">▶</span><span class="clip-dur">${c.dur}</span></div>
       <div class="clip-meta">
-        <div class="clip-label"><b>第 ${i+1} 集</b><span class="clip-name" title="${esc(c.name)}">${esc(c.name)}</span></div>
+        <div class="clip-label">
+          <div class="clip-title-row"><b>第 ${i+1} 集</b><span class="clip-status ${ps}">${ps==='parsing'?'<i class="ps-dot"></i>':''}${psLabel}</span></div>
+          <span class="clip-name" title="${esc(c.name)}">${esc(c.name)}</span>
+        </div>
         ${locked?'':`<button class="clip-del" data-i="${i}">✕</button>`}
       </div>
     </div>`;
   }).join('');
+  const parseSummary = state.parseStatus === 'idle'
+    ? `<div class="parse-summary"><span class="ps-legend"><i class="dot ok"></i>解析成功 <b>${pc.ok}</b></span><span class="ps-legend"><i class="dot fail"></i>解析失败 <b>${pc.fail}</b></span><span class="ps-legend"><i class="dot idle"></i>未解析 <b>${pc.unparsed}</b></span><span class="ps-live">确认原片后开始解析</span></div>`
+    : state.parseStatus === 'parsing'
+      ? `<div class="parse-summary"><span class="ps-legend"><i class="dot ok"></i>解析成功 <b>${pc.ok}</b></span><span class="ps-legend"><i class="dot fail"></i>解析失败 <b>${pc.fail}</b></span><span class="ps-legend"><i class="dot idle"></i>未解析 <b>${pc.unparsed}</b></span><span class="ps-live"><span class="spin xs"></span>解析中 ${state.parseProgress}%</span></div>`
+      : `<div class="parse-summary"><span class="ps-legend"><i class="dot ok"></i>解析成功 <b>${pc.ok}</b></span><span class="ps-legend"><i class="dot fail"></i>解析失败 <b>${pc.fail}</b></span><span class="ps-legend"><i class="dot idle"></i>未解析 <b>${pc.unparsed}</b></span><span class="ps-live done">✓ 解析完成</span></div>`;
   return `<div class="mgr ${locked?'is-locked':''}">
     <div class="mgr-head">
       <div>原片管理 <em>${state.clips.length} ${state.clipSource==='pan'?'个视频':'集'}</em>${locked?'<span class="mgr-lock">🔒 已确认 · 仅可查看</span>':''}</div>
       ${locked?'':'<button class="tb-primary" id="addClip">＋ 上传原片</button>'}
     </div>
+    ${parseSummary}
     <div class="clip-grid" id="clipGrid">${cards}</div>
     <p class="mgr-tip">${locked
-      ? '原片已确认并锁定，仅支持预览查看；如需更换请返回入口重新创建项目'
+      ? state.parseStatus==='parsing'
+        ? '原片已确认，正在解析视频，请稍候；解析结果会实时更新'
+        : '原片已确认并锁定，仅支持预览查看；如需更换请返回入口重新创建项目'
       : '拖拽卡片可调整顺序 · 点击缩略图预览 · ✕ 删除'}</p>
   </div>`;
 }
