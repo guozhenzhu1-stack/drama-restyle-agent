@@ -78,22 +78,26 @@ function renderLanding(){
   const L = state.landing;
   const isFilm = L.toggle === 'film';
   const isRestyle = L.toggle === 'restyle';
-  const uploads = Array.isArray(L.uploads) ? L.uploads : [];
   const isLocalRestyle = isRestyle && L.videoSource !== 'pan';
+  const uploads = Array.isArray(L.uploads) ? L.uploads : [];
+  const hasUploads = isLocalRestyle && uploads.length > 0;
   const allUploaded = uploads.length > 0 && uploads.every(u=> u.status === 'done');
   const canSend = !isRestyle || (isLocalRestyle && allUploaded);
   const sendHint = canSend ? '创建项目'
     : L.videoSource==='pan' ? '请先从网盘导入视频'
     : uploads.length ? '请等待全部视频上传成功' : '请先上传本地视频';
-  const upItem = u=>`<div class="upitem ${u.status}">
-    <span class="upico">🎞</span>
-    <span class="upmain">
-      <span class="upname" title="${esc(u.name)}">${esc(u.name)}</span>
-      <span class="upbar"><i style="width:${u.status==='done'?100:u.progress}%"></i></span>
-      <span class="upmeta">${u.status==='uploading'?`上传中 ${u.progress}%` : u.status==='done' ? `上传成功 · ${u.sizeLabel}` : `上传失败${u.error?' · '+esc(u.error):''}`}</span>
-    </span>
+  const upScenes = [SC.bedroom, SC.hall, SC.city, SC.corridor, SC.snowHall];
+  const upCard = (u,i)=>{
+    const thumb = drawScene(upScenes[i % upScenes.length], 'old');
+    return `<div class="up-card ${u.status}" style="--i:${i}" title="${esc(u.name)} · ${u.status==='done'?'上传成功':u.status==='fail'?('上传失败'+(u.error?'：'+u.error:'')):('上传中 '+u.progress+'%')}">
+    <img src="${thumb}" alt="">
+    <span class="up-card-no">${String(i+1).padStart(2,'0')}</span>
+    <span class="up-card-state">${u.status==='uploading'?`${u.progress}%` : u.status==='done'?'✓ 成功':'✕ 失败'}</span>
+    <span class="up-card-name">${esc(u.name)}<small>${u.sizeLabel}</small></span>
     <button class="updel" type="button" data-upload-remove="${u.id}" title="移除该视频">✕</button>
+    <span class="up-card-bar"><i style="width:${u.status==='uploading'?u.progress:100}%"></i></span>
   </div>`;
+  };
   $('#main').innerHTML = `
   <div class="landing">
     <div class="hero">
@@ -122,22 +126,26 @@ function renderLanding(){
             </div>
             <div class="pan-hint">提取码选填；Agent 会自动拉取该文件夹内的全部视频文件，并加入「原片管理」</div>
           </div>`:`
-          <div class="dropzone ${isLocalRestyle && uploads.length?'has-files':''}" id="drop">
-            <div class="dz-ico">${ICON.upload}</div>
-            <div class="dz-title">${isRestyle?'上传视频':'上传剧本'}</div>
-            <div class="dz-sub">${isRestyle
-              ? '支持 mp4 / mov 格式，单个文件大小不超过 500M，单次最多上传 10 个视频，可持续多次上传'
-              : '支持上传 txt / docx / pdf 文件'}</div>
-          </div>
-          ${isLocalRestyle && uploads.length?`
-          <div class="uplist">
-            ${uploads.map(upItem).join('')}
-            <div class="up-summary ${allUploaded?'ok':''}">
-              ${allUploaded
-                ? `✓ ${uploads.length} 个视频已全部上传成功，可以点击发送`
-                : `已选择 ${uploads.length} 个视频 · 全部上传成功后才可发送`}
+          <div class="upload-row ${hasUploads?'has-uploads':''}">
+            <div class="dropzone ${hasUploads?'upload-tile has-files':''}" id="drop">
+              <div class="dz-ico">${ICON.upload}</div>
+              <div class="dz-title">${isRestyle?'上传视频':'上传剧本'}</div>
+              <div class="dz-sub">${isRestyle
+                ? '支持 mp4 / mov 格式，单个文件大小不超过 500M，单次最多上传 10 个视频，可持续多次上传'
+                : '支持上传 txt / docx / pdf 文件'}</div>
             </div>
-          </div>`:''}`}
+            ${hasUploads?`
+            <div class="up-stack-wrap">
+              <div class="up-stack">
+                ${uploads.map(upCard).join('')}
+              </div>
+              <div class="up-summary ${allUploaded?'ok':''}">
+                ${allUploaded
+                  ? `✓ ${uploads.length} 个视频已全部上传成功，可以点击发送`
+                  : `已选择 ${uploads.length} 个视频 · 全部上传成功后才可发送`}
+              </div>
+            </div>`:''}
+          </div>`}
           <textarea class="q-input" id="q" placeholder="输入你的改编想法…">${esc(L.query)}</textarea>
           ${isFilm?'':`<div class="entry-toolbar">
             <div class="tool" id="tStyle"><span class="ti">${ICON.wand}</span>${styleName(L.style)}<span class="chev">⌄</span></div>
