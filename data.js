@@ -705,10 +705,19 @@ const SHOTS = [
   { id:"sh7", dur:"00:00:02", scene:SC.bedroom,  done:false, seg:seg("主卧","林嘉琪","银色项链","沉默伫立，若有所思。") },
 ];
 
+/* ---- 入口页默认示例视频（无需上传即可直接发送）---- */
+const SAMPLE_UPLOADS = [
+  { id:"sample1", name:"示例视频01_雨夜重逢.mp4",   sizeLabel:"128.4 MB", progress:100, status:"done", error:"", sample:true },
+  { id:"sample2", name:"示例视频02_宴会交锋.mp4",   sizeLabel:"96.7 MB",  progress:100, status:"done", error:"", sample:true },
+  { id:"sample3", name:"示例视频03_长廊告白.mov",   sizeLabel:"154.2 MB", progress:100, status:"done", error:"", sample:true },
+  { id:"sample4", name:"示例视频04_真相浮现.mp4",   sizeLabel:"112.8 MB", progress:100, status:"done", error:"", sample:true },
+  { id:"sample5", name:"示例视频05_决绝离场.mp4",   sizeLabel:"143.1 MB", progress:100, status:"done", error:"", sample:true },
+];
+
 /* ---- 可编辑运行态 ---- */
 const state = {
   screen:"landing",                       // landing | project
-  landing:{ tab:"restyle", toggle:"film", videoSource:"local", style:"real", modelVideo:"Minimax H3 MAX", modelImage:"image2.5", region:REGIONS[1], ratio:"16:9", reso:"720P", query:"", panLink:"", panCode:"", panLoading:false, uploads:[] },
+  landing:{ tab:"restyle", toggle:"film", videoSource:"local", style:"real", modelVideo:"Minimax H3 MAX", modelImage:"image2.5", region:REGIONS[1], ratio:"16:9", reso:"720P", query:"", panLink:"", panCode:"", panLoading:false, uploads:SAMPLE_UPLOADS.map(u=>({...u})) },
   project:{ title:"重生之不再爱了", style:"real", modelVideo:MODELS_VIDEO[0], modelImage:MODELS_IMAGE[0], ratio:"16:9", reso:"720P", region:REGIONS[1] },
   stage:"clips",                          // clips | asset | shot | film
   maxStage:0,                             // 已推进到的最远环节：0 原片 1 资产 2 分镜 3 成片

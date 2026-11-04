@@ -82,6 +82,8 @@ function renderLanding(){
   const uploads = Array.isArray(L.uploads) ? L.uploads : [];
   const hasUploads = isLocalRestyle && uploads.length > 0;
   const allUploaded = uploads.length > 0 && uploads.every(u=> u.status === 'done');
+  const sampleCount = uploads.filter(u=> u.sample).length;
+  const allSamples = sampleCount > 0 && sampleCount === uploads.length;
   const canSend = !isRestyle || (isLocalRestyle && allUploaded);
   const sendHint = canSend ? '创建项目'
     : L.videoSource==='pan' ? '请先从网盘导入视频'
@@ -89,10 +91,15 @@ function renderLanding(){
   const upScenes = [SC.bedroom, SC.hall, SC.city, SC.corridor, SC.snowHall];
   const upCard = (u,i)=>{
     const thumb = drawScene(upScenes[i % upScenes.length], 'old');
-    return `<div class="up-card ${u.status}" style="--i:${i}" title="${esc(u.name)} · ${u.status==='done'?'上传成功':u.status==='fail'?('上传失败'+(u.error?'：'+u.error:'')):('上传中 '+u.progress+'%')}">
+    const statusText = u.status==='uploading' ? `上传中 ${u.progress}%`
+      : u.status==='done' ? (u.sample ? '示例视频 · 已就绪' : '上传成功')
+      : `上传失败${u.error?'：'+esc(u.error):''}`;
+    const badge = u.status==='uploading' ? `${u.progress}%`
+      : u.status==='done' ? (u.sample ? '✓ 示例' : '✓ 成功') : '✕ 失败';
+    return `<div class="up-card ${u.status}${u.sample?' sample':''}" style="--i:${i}" title="${esc(u.name)} · ${statusText}">
     <img src="${thumb}" alt="">
     <span class="up-card-no">${String(i+1).padStart(2,'0')}</span>
-    <span class="up-card-state">${u.status==='uploading'?`${u.progress}%` : u.status==='done'?'✓ 成功':'✕ 失败'}</span>
+    <span class="up-card-state">${badge}</span>
     <span class="up-card-name">${esc(u.name)}<small>${u.sizeLabel}</small></span>
     <button class="updel" type="button" data-upload-remove="${u.id}" title="移除该视频">✕</button>
     <span class="up-card-bar"><i style="width:${u.status==='uploading'?u.progress:100}%"></i></span>
@@ -141,8 +148,14 @@ function renderLanding(){
               </div>
               <div class="up-summary ${allUploaded?'ok':''}">
                 ${allUploaded
-                  ? `✓ ${uploads.length} 个视频已全部上传成功，可以点击发送`
-                  : `已选择 ${uploads.length} 个视频 · 全部上传成功后才可发送`}
+                  ? allSamples
+                    ? `✓ 已预置 ${uploads.length} 个示例视频，可直接点击发送，也可继续上传`
+                    : sampleCount
+                      ? `✓ ${uploads.length} 个视频已就绪（含 ${sampleCount} 个示例），可以点击发送`
+                      : `✓ ${uploads.length} 个视频已全部上传成功，可以点击发送`
+                  : sampleCount
+                    ? `已选择 ${uploads.length} 个视频（含 ${sampleCount} 个示例）· 全部上传成功后才可发送`
+                    : `已选择 ${uploads.length} 个视频 · 全部上传成功后才可发送`}
               </div>
             </div>`:''}
           </div>`}
