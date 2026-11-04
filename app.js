@@ -126,7 +126,7 @@ function renderLanding(){
             <div class="dz-ico">${ICON.upload}</div>
             <div class="dz-title">${isRestyle?'上传视频':'上传剧本'}</div>
             <div class="dz-sub">${isRestyle
-              ? '支持 mp4 / mov 格式，单个大小不超过 500M，单次最多 10 个视频，可继续多次上传'
+              ? '支持 mp4 / mov 格式，单个文件大小不超过 500M，单次最多上传 10 个视频，可持续多次上传'
               : '支持上传 txt / docx / pdf 文件'}</div>
           </div>
           ${isLocalRestyle && uploads.length?`
