@@ -730,6 +730,8 @@ const state = {
   assetTab:"character",                   // character | scene | prop
   assetLibTab:"character",                // 项目资产页：character | scene | prop | video | other
   assetLibDetail:null,                    // 项目资产详情：{cat, id} | null
+  assetLibExport:false,                   // 项目资产批量导出选择模式
+  assetLibSel:new Set(),                  // 项目资产批量导出勾选
   clips: CLIPS.map(x=>({...x})),
   clipSource: "demo",                     // demo | pan（百度网盘导入）
   episodes: EPISODES,

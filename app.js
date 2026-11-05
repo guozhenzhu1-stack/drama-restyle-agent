@@ -449,6 +449,8 @@ function bindTopbar(){
   $('#assetBtn').onclick = ()=>{
     state.assetLibTab = 'character';
     state.assetLibDetail = null;
+    state.assetLibExport = false;
+    state.assetLibSel.clear();
     state.screen = 'assets';
     render();
   };
@@ -480,8 +482,73 @@ function libCharacters(){
 function libSimple(cat){
   return state.assets[cat].filter(assetIsDone).map(a=>({a, image:assetImage(a, cat, 'new')}));
 }
-function libVideos(){
-  return state.shots.map((s,i)=>({s, i})).filter(x=> x.s.done);
+function filmCoverStill(){
+  const cover = state.shots.find(s=>s.done) || state.shots[0];
+  return cover ? shotStill(cover) : shotPlaceholderSVG();
+}
+function libVideoGroups(){
+  const groups = [];
+  if(state.clips.length){
+    groups.push({
+      key:'source', label:'原片',
+      items: state.clips.map((c,i)=>({
+        key:'video-source:'+c.id,
+        kind:'source',
+        idx:i,
+        name:`原片 ${String(i+1).padStart(2,'0')}`,
+        title:c.name,
+        cover:drawScene(c.scene, 'orig'),
+        badge:c.dur || '原片',
+        level:'原片',
+      })),
+    });
+  }
+  const shots = state.shots.map((s,i)=>({s, i})).filter(x=> x.s.done);
+  if(shots.length){
+    groups.push({
+      key:'shot', label:'分镜',
+      items: shots.map(({s,i})=>({
+        key:'video-shot:'+i,
+        kind:'shot',
+        idx:i,
+        name:`分镜 ${String(i+1).padStart(2,'0')}`,
+        title:`分镜 ${String(i+1).padStart(2,'0')}`,
+        cover:shotStill(s),
+        badge:s.dur,
+        level:'分镜',
+      })),
+    });
+  }
+  if((state.maxStage || 0) >= 3){
+    groups.push({
+      key:'film', label:'成片',
+      items: [{
+        key:'video-film',
+        kind:'film',
+        name:'合成成片',
+        title:'合成成片',
+        cover:filmCoverStill(),
+        badge:'成片',
+        level:'成片',
+      }],
+    });
+  }
+  return groups;
+}
+function libKeys(k){
+  if(k==='character') return libCharacters().map(x=>'character:'+x.a.id);
+  if(k==='video') return libVideoGroups().flatMap(g=>g.items.map(x=>x.key));
+  if(k==='scene' || k==='prop') return libSimple(k).map(x=>k+':'+x.a.id);
+  return [];
+}
+function libCardMeta(key){
+  const exporting = !!state.assetLibExport;
+  const selected = exporting && state.assetLibSel.has(key);
+  return {
+    key,
+    cls:`alib-card${exporting?' is-selectable':''}${selected?' is-selected':''}`,
+    check:exporting ? `<span class="alib-check">${selected?'✓':''}</span>` : '',
+  };
 }
 function libEmptyHTML(k){
   const label = (ALIB_TABS.find(t=>t.k===k)||{}).l || '资产';
@@ -490,41 +557,98 @@ function libEmptyHTML(k){
 function libCardHTML(k, item){
   if(k==='character'){
     const badge = item.looks.length ? `${item.looks.length} 造型` : '主图';
-    return `<button class="alib-card" data-lib-cat="character" data-lib-id="${item.a.id}" title="查看${esc(item.a.name)}">
-      <span class="alib-cover"><img src="${esc(item.cover)}" alt="${esc(item.a.name)}"><span class="alib-badge">${badge}</span></span>
+    const m = libCardMeta('character:'+item.a.id);
+    return `<button class="${m.cls}" data-lib-cat="character" data-lib-key="${m.key}" data-lib-id="${item.a.id}" title="查看${esc(item.a.name)}">
+      <span class="alib-cover"><img src="${esc(item.cover)}" alt="${esc(item.a.name)}">${m.check}<span class="alib-badge">${badge}</span></span>
       <span class="alib-name">${esc(item.a.name)}</span>
     </button>`;
   }
   if(k==='video'){
-    return `<button class="alib-card" data-lib-cat="video" data-lib-idx="${item.i}" title="查看分镜 ${item.i+1}">
-      <span class="alib-cover"><img src="${shotStill(item.s)}" alt="分镜 ${item.i+1}"><span class="alib-badge">${esc(item.s.dur)}</span></span>
-      <span class="alib-name">分镜 ${String(item.i+1).padStart(2,'0')}</span>
+    const m = libCardMeta(item.key);
+    return `<button class="${m.cls}" data-lib-cat="video" data-lib-key="${m.key}" data-lib-kind="${item.kind}" ${item.idx!=null?`data-lib-idx="${item.idx}"`:''} title="查看${esc(item.title || item.name)}">
+      <span class="alib-cover"><img src="${item.cover}" alt="${esc(item.name)}">${m.check}<span class="alib-badge">${esc(item.badge)}</span></span>
+      <span class="alib-name">${esc(item.name)}</span>
+      <span class="alib-level">${esc(item.level)}</span>
     </button>`;
   }
-  return `<button class="alib-card" data-lib-cat="${k}" data-lib-id="${item.a.id}" title="查看${esc(item.a.name)}">
-    <span class="alib-cover"><img src="${esc(item.image)}" alt="${esc(item.a.name)}"><span class="alib-badge">${ASSET_LABEL[k]}</span></span>
+  const m = libCardMeta(k+':'+item.a.id);
+  return `<button class="${m.cls}" data-lib-cat="${k}" data-lib-key="${m.key}" data-lib-id="${item.a.id}" title="查看${esc(item.a.name)}">
+    <span class="alib-cover"><img src="${esc(item.image)}" alt="${esc(item.a.name)}">${m.check}<span class="alib-badge">${ASSET_LABEL[k]}</span></span>
     <span class="alib-name">${esc(item.a.name)}</span>
   </button>`;
+}
+function toggleAssetLibSel(key){
+  if(!key || !state.assetLibExport) return;
+  if(state.assetLibSel.has(key)){
+    state.assetLibSel.delete(key);
+  }else{
+    if(state.assetLibSel.size >= 100){ toast('单次最多可选 100 个资产'); return; }
+    state.assetLibSel.add(key);
+  }
+  renderAssets();
+}
+function selectAllAssetLib(){
+  const keys = libKeys(state.assetLibTab);
+  const allowed = keys.slice(0, 100);
+  if(allowed.length && allowed.every(k=> state.assetLibSel.has(k))){
+    state.assetLibSel.clear();
+  }else{
+    state.assetLibSel = new Set(allowed);
+    if(keys.length > 100) toast('单次最多可选 100 个资产，已选择前 100 个');
+  }
+  renderAssets();
+}
+function exportSelectedAssets(){
+  const count = state.assetLibSel.size;
+  if(!count){ toast('请先勾选要导出的资产'); return; }
+  const label = (ALIB_TABS.find(t=>t.k===state.assetLibTab)||{}).l || '资产';
+  state.assetLibExport = false;
+  state.assetLibSel.clear();
+  renderAssets();
+  toast(`已开始批量导出 ${count} 个${label}资产`);
+  setTimeout(()=> toast(`批量导出完成：${count} 个${label}资产`), 1000);
 }
 function renderAssets(){
   if(state.assetLibDetail){ renderAssetDetail(); return; }
   const tab = ALIB_TABS.some(t=>t.k===state.assetLibTab) ? state.assetLibTab : 'character';
   state.assetLibTab = tab;
-  let cards = '';
-  if(tab==='character') cards = libCharacters().map(x=>libCardHTML('character', x)).join('');
-  else if(tab==='video') cards = libVideos().map(x=>libCardHTML('video', x)).join('');
-  else if(tab!=='other') cards = libSimple(tab).map(x=>libCardHTML(tab, x)).join('');
+  const exporting = !!state.assetLibExport;
+  const selCount = state.assetLibSel.size;
+  let body = '';
+  if(tab==='video'){
+    const groups = libVideoGroups();
+    body = groups.length
+      ? `<div class="alib-vgroups">${groups.map(g=>`<section class="alib-vgroup">
+          <div class="alib-vgroup-head">
+            <h2>${g.label}</h2>
+            <span>${g.items.length} 个</span>
+          </div>
+          <div class="alib-grid is-wide">${g.items.map(x=>libCardHTML('video', x)).join('')}</div>
+        </section>`).join('')}</div>`
+      : libEmptyHTML(tab);
+  }else{
+    let cards = '';
+    if(tab==='character') cards = libCharacters().map(x=>libCardHTML('character', x)).join('');
+    else if(tab!=='other') cards = libSimple(tab).map(x=>libCardHTML(tab, x)).join('');
+    body = cards ? `<div class="alib-grid ${tab!=='character'?'is-wide':''}">${cards}</div>` : libEmptyHTML(tab);
+  }
+  const headRight = exporting
+    ? `<span class="alib-sel-count">已选 <b>${selCount}</b> / 100</span>
+       <button class="alib-export-btn ghost" type="button" id="alibSelAll">全选当前页</button>
+       <button class="alib-export-btn ghost" type="button" id="alibSelCancel">取消</button>
+       <button class="alib-export-btn primary" type="button" id="alibSelExport" ${selCount?'':'disabled'}>导出所选（${selCount}）</button>`
+    : `<button class="alib-export-btn" type="button" id="alibExport">⇩ 批量导出</button>`;
   $('#main').innerHTML = `<div class="alib">
     <div class="alib-head">
       <button class="alib-back" id="alibBack" title="返回项目">‹</button>
       <h1>项目资产</h1>
+      <div class="alib-head-right">${headRight}</div>
     </div>
     <div class="alib-tabs">
       ${ALIB_TABS.map(t=>`<button data-lib-tab="${t.k}" class="${tab===t.k?'on':''}">${t.l}</button>`).join('')}
     </div>
-    <div class="alib-body">
-      ${cards ? `<div class="alib-grid ${tab!=='character'?'is-wide':''}">${cards}</div>` : libEmptyHTML(tab)}
-    </div>
+    ${exporting ? `<div class="alib-export-hint">勾选当前页面的资产进行批量导出，单次最多可选 100 个</div>` : ''}
+    <div class="alib-body">${body}</div>
   </div>`;
   bindAssetLibrary();
 }
@@ -589,19 +713,54 @@ function bindAssetLibrary(){
   const back = $('#alibBack');
   if(back) back.onclick = ()=>{
     if(state.assetLibDetail){ state.assetLibDetail = null; renderAssets(); }
-    else { state.screen = 'project'; render(); }
+    else {
+      state.assetLibExport = false;
+      state.assetLibSel.clear();
+      state.screen = 'project';
+      render();
+    }
   };
+  const exportBtn = $('#alibExport');
+  if(exportBtn) exportBtn.onclick = ()=>{
+    state.assetLibExport = true;
+    state.assetLibSel.clear();
+    renderAssets();
+  };
+  const selAll = $('#alibSelAll');
+  if(selAll) selAll.onclick = selectAllAssetLib;
+  const selCancel = $('#alibSelCancel');
+  if(selCancel) selCancel.onclick = ()=>{
+    state.assetLibExport = false;
+    state.assetLibSel.clear();
+    renderAssets();
+  };
+  const selExport = $('#alibSelExport');
+  if(selExport) selExport.onclick = exportSelectedAssets;
   $$('[data-lib-tab]').forEach(b=> b.onclick = ()=>{
     state.assetLibTab = b.dataset.libTab;
     state.assetLibDetail = null;
+    state.assetLibExport = false;
+    state.assetLibSel.clear();
     renderAssets();
   });
   $$('[data-lib-cat]').forEach(card=> card.onclick = ()=>{
+    if(state.assetLibExport){
+      toggleAssetLibSel(card.dataset.libKey);
+      return;
+    }
     const cat = card.dataset.libCat;
     if(cat==='video'){
-      const i = +card.dataset.libIdx;
-      const s = state.shots[i];
-      if(s) openImageZoom(shotStill(s), `分镜 ${String(i+1).padStart(2,'0')}`);
+      const kind = card.dataset.libKind;
+      const i = card.dataset.libIdx == null ? -1 : +card.dataset.libIdx;
+      if(kind==='source'){
+        const c = state.clips[i];
+        if(c) openImageZoom(drawScene(c.scene, 'orig'), `原片 ${String(i+1).padStart(2,'0')} · ${c.name}`);
+      }else if(kind==='film'){
+        openImageZoom(filmCoverStill(), '合成成片');
+      }else{
+        const s = state.shots[i];
+        if(s) openImageZoom(shotStill(s), `分镜 ${String(i+1).padStart(2,'0')}`);
+      }
       return;
     }
     state.assetLibDetail = {cat, id:card.dataset.libId};
@@ -1138,10 +1297,8 @@ function assetHTML(){
   const tools = state.assetBatch
     ? `<label class="selall"><input type="checkbox" id="selAll">全选</label>
        <button class="aghost" id="cancelBatch">取消</button>
-       <button class="aghost" id="exportAssets">⬇ 导出 Excel 资产表</button>
        <button class="aprimary" id="genAll">生成所选</button>`
-    : `<button class="aghost" id="exportAssets">⬇ 导出 Excel 资产表</button>
-       <button class="aprimary" id="batchStart">批量生成</button>`;
+    : `<button class="aprimary" id="batchStart">批量生成</button>`;
   return `
     <div class="subtabs">
       ${ASSET_SUBS.map(s=>`<button data-k="${s.k}" class="${state.assetTab===s.k?'on':''}">${s.l} <em>${state.assets[s.k].length}</em></button>`).join('')}
@@ -1315,190 +1472,6 @@ function openCompare(id, lookId){
     <div class="player-foot">${kind} · ${styleName(state.project.style)} · 左右为转绘前后完整对比</div>
   </div>`);
 }
-/* ---- 资产表导出（Excel） ---- */
-const XLSX_CRC_TABLE = (()=>{
-  const t = new Uint32Array(256);
-  for(let n=0;n<256;n++){
-    let c = n;
-    for(let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-function xlsxCrc32(u8){
-  let c = 0xFFFFFFFF;
-  for(let i=0;i<u8.length;i++) c = XLSX_CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
-  return (c ^ 0xFFFFFFFF) >>> 0;
-}
-/* 纯前端生成 .xlsx：ZIP(store) + OOXML，无需第三方库 */
-function xlsxZip(files){
-  const enc = new TextEncoder();
-  const chunks = [], central = [];
-  let offset = 0;
-  const d = new Date();
-  const dosTime = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
-  const dosDate = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
-  files.forEach(([name, content])=>{
-    const nameU8 = enc.encode(name);
-    const dataU8 = enc.encode(content);
-    const crc = xlsxCrc32(dataU8);
-    const lh = new Uint8Array(30 + nameU8.length);
-    const lv = new DataView(lh.buffer);
-    lv.setUint32(0, 0x04034b50, true);
-    lv.setUint16(4, 20, true);
-    lv.setUint16(6, 0x0800, true);      // UTF-8 文件名
-    lv.setUint16(8, 0, true);           // store
-    lv.setUint16(10, dosTime, true);
-    lv.setUint16(12, dosDate, true);
-    lv.setUint32(14, crc, true);
-    lv.setUint32(18, dataU8.length, true);
-    lv.setUint32(22, dataU8.length, true);
-    lv.setUint16(26, nameU8.length, true);
-    lv.setUint16(28, 0, true);
-    lh.set(nameU8, 30);
-    chunks.push(lh, dataU8);
-
-    const ch = new Uint8Array(46 + nameU8.length);
-    const cv = new DataView(ch.buffer);
-    cv.setUint32(0, 0x02014b50, true);
-    cv.setUint16(4, 20, true);
-    cv.setUint16(6, 20, true);
-    cv.setUint16(8, 0x0800, true);
-    cv.setUint16(10, 0, true);
-    cv.setUint16(12, dosTime, true);
-    cv.setUint16(14, dosDate, true);
-    cv.setUint32(16, crc, true);
-    cv.setUint32(20, dataU8.length, true);
-    cv.setUint32(24, dataU8.length, true);
-    cv.setUint16(28, nameU8.length, true);
-    cv.setUint16(30, 0, true);
-    cv.setUint16(32, 0, true);
-    cv.setUint16(34, 0, true);
-    cv.setUint16(36, 0, true);
-    cv.setUint32(38, 0, true);
-    cv.setUint32(42, offset, true);
-    ch.set(nameU8, 46);
-    central.push(ch);
-    offset += lh.length + dataU8.length;
-  });
-  const cdSize = central.reduce((n,c)=> n + c.length, 0);
-  const end = new Uint8Array(22);
-  const ev = new DataView(end.buffer);
-  ev.setUint32(0, 0x06054b50, true);
-  ev.setUint16(8, files.length, true);
-  ev.setUint16(10, files.length, true);
-  ev.setUint32(12, cdSize, true);
-  ev.setUint32(16, offset, true);
-  return [...chunks, ...central, end];
-}
-function xlsxEsc(v){
-  return String(v==null?'':v)
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
-}
-function xlsxCol(n){
-  let s = '';
-  for(n++; n>0; n = Math.floor((n-1)/26)) s = String.fromCharCode(65 + ((n-1)%26)) + s;
-  return s;
-}
-function xlsxSheet(rows, widths){
-  const cols = widths && widths.length
-    ? `<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
-    : '';
-  const body = rows.map((row,ri)=>`<row r="${ri+1}">${row.map((cell,ci)=>{
-    const ref = xlsxCol(ci) + (ri+1);
-    const style = ri === 0 ? 1 : 2;
-    if(cell === null || cell === undefined || cell === '') return `<c r="${ref}" s="${style}"/>`;
-    return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(cell)}</t></is></c>`;
-  }).join('')}</row>`).join('');
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${body}</sheetData></worksheet>`;
-}
-function buildAssetXlsx(){
-  const p = state.project;
-  const lang = regionLang(p.region);
-  const charList = state.assets.character;
-  const sceneList = state.assets.scene;
-  const propList = state.assets.prop;
-  const count = charList.length + sceneList.length + propList.length;
-  const lookCount = charList.reduce((n,a)=> n + ((a.looks && a.looks.length) || 0), 0);
-  const today = new Date().toLocaleString('zh-CN', {hour12:false});
-  const locName = a=>{
-    for(const k in SCRIPT_CAST){
-      if(SCRIPT_CAST[k].zh === a.name) return SCRIPT_CAST[k][lang] || a.name;
-    }
-    return a.name;
-  };
-
-  const infoRows = [
-    ['项目信息', '内容'],
-    ['项目名称', p.title],
-    ['目标地区', regionLabel(p.region)],
-    ['画风', styleName(p.style)],
-    ['画幅', p.ratio],
-    ['清晰度', p.reso],
-    ['资产总数', `${count} 项`],
-    ['角色妆造', `${lookCount} 套`],
-    ['导出时间', today],
-    ['导出方', '百度一镜 · 短剧转绘 Agent'],
-    ['说明', '本表为资产清单；转绘前后对比图请在「资产确认」页查看。'],
-  ];
-
-  const charRows = [['转绘后角色名', '原始角色名', '角色身份', '妆造名', '转绘提示词', '状态']];
-  charList.forEach(a=>{
-    const looks = (a.looks && a.looks.length) ? a.looks : [{ id:a.id, name:'默认造型', prompt:a.prompt }];
-    const hasLooks = !!(a.looks && a.looks.length);
-    looks.forEach(lk=>{
-      const done = a.pre || (hasLooks ? state.lookDone[lk.id] : assetIsDone(a));
-      charRows.push([locName(a), a.name, a.role || '', lk.name, lk.prompt, done ? '已生成' : '待生成']);
-    });
-  });
-  const simpleRows = (list, label)=>[
-    [label, '转绘提示词', '状态'],
-    ...list.map(a=>{
-      const done = assetIsDone(a);
-      return [a.name, a.prompt, done ? '已生成' : '待生成'];
-    }),
-  ];
-  const sceneRows = simpleRows(sceneList, '场景名');
-  const propRows = simpleRows(propList, '道具名');
-
-  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
-  const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
-  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="项目信息" sheetId="1" r:id="rId1"/><sheet name="角色资产" sheetId="2" r:id="rId2"/><sheet name="场景资产" sheetId="3" r:id="rId3"/><sheet name="道具资产" sheetId="4" r:id="rId4"/></sheets></workbook>`;
-  const wbRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
-  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F4F8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFDCE1EA"/></left><right style="thin"><color rgb="FFDCE1EA"/></right><top style="thin"><color rgb="FFDCE1EA"/></top><bottom style="thin"><color rgb="FFDCE1EA"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
-
-  const files = [
-    ['[Content_Types].xml', contentTypes],
-    ['_rels/.rels', rootRels],
-    ['xl/workbook.xml', workbook],
-    ['xl/_rels/workbook.xml.rels', wbRels],
-    ['xl/styles.xml', styles],
-    ['xl/worksheets/sheet1.xml', xlsxSheet(infoRows, [18, 56])],
-    ['xl/worksheets/sheet2.xml', xlsxSheet(charRows, [20, 16, 16, 18, 60, 10])],
-    ['xl/worksheets/sheet3.xml', xlsxSheet(sceneRows, [22, 64, 10])],
-    ['xl/worksheets/sheet4.xml', xlsxSheet(propRows, [22, 64, 10])],
-  ];
-  const blob = new Blob(xlsxZip(files), {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  return { blob, count, lookCount };
-}
-function exportAssetTable(){
-  const p = state.project;
-  const { blob, count, lookCount } = buildAssetXlsx();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${p.title}_转绘资产表.xlsx`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=> URL.revokeObjectURL(url), 1000);
-  toast(`已导出 Excel 资产表（${count} 项资产 · ${lookCount} 套妆造）`);
-}
 /* ---- 参考图上传 / 放大查看 ---- */
 function pickRefImages(cb){
   const inp = document.createElement('input');
@@ -1591,7 +1564,6 @@ function bindAsset(){
     state.assetSel.clear();
     renderBody();
   };
-  $('#exportAssets').onclick = exportAssetTable;
   const genAll = $('#genAll');
   if(genAll) genAll.onclick = batchGenerate;
   updateBatchBtn();
