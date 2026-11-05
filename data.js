@@ -726,6 +726,7 @@ const state = {
   parseEta:0,                             // 预计剩余秒数
   parseTimer:null,                        // 模拟解析定时器
   clipParse:{},                           // 原片 id -> unparsed | parsing | ok | fail
+  parseFailId:"",                         // 首次解析时模拟失败的视频 id
   assetTab:"character",                   // character | scene | prop
   assetLibTab:"character",                // 项目资产页：character | scene | prop | video | other
   assetLibDetail:null,                    // 项目资产详情：{cat, id} | null

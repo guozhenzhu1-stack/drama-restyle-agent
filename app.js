@@ -354,12 +354,19 @@ function enterProject(){
   state.screen='project'; state.stage='clips'; state.maxStage=0;
   render();
 }
+const parseRetryTimers = new Map();
+function clearParseRetryTimers(){
+  parseRetryTimers.forEach(t=> clearTimeout(t));
+  parseRetryTimers.clear();
+}
 function resetParseState(){
   if(state.parseTimer){ clearInterval(state.parseTimer); state.parseTimer = null; }
+  clearParseRetryTimers();
   state.parseStatus = 'idle';
   state.parseProgress = 0;
   state.parseEta = 0;
   state.clipParse = {};
+  state.parseFailId = '';
   state.clips.forEach(c=> state.clipParse[c.id] = 'unparsed');
 }
 /* ---- 百度网盘文件夹导入（Demo 模拟拉取） ---- */
@@ -435,6 +442,7 @@ function bindTopbar(){
   const p = state.project;
   $('#back').onclick = ()=>{
     if(state.parseTimer){ clearInterval(state.parseTimer); state.parseTimer = null; }
+    clearParseRetryTimers();
     state.screen='landing'; render();
   };
   $('#title').onchange = e=> p.title = e.target.value || p.title;
@@ -692,6 +700,7 @@ function startParsing(){
   state.parseStatus = 'parsing';
   state.parseProgress = 0;
   state.parseEta = PARSE_SECONDS;
+  state.parseFailId = state.clips.length ? state.clips[Math.min(1, state.clips.length - 1)].id : '';
   state.clips.forEach(c=> state.clipParse[c.id] = 'unparsed');
   renderBody();
   scrollChatBottom();
@@ -713,15 +722,42 @@ function startParsing(){
       state.parseStatus = 'done';
       state.parseProgress = 100;
       state.parseEta = 0;
-      state.clips.forEach(c=> state.clipParse[c.id] = 'ok');
+      let okCount = 0, failCount = 0;
+      state.clips.forEach(c=>{
+        const st = c.id === state.parseFailId ? 'fail' : 'ok';
+        state.clipParse[c.id] = st;
+        if(st === 'ok') okCount++; else failCount++;
+      });
       renderBody();
       scrollChatBottom();
-      toast(`视频解析完成：${state.clips.length} 个成功`);
+      toast(failCount
+        ? `视频解析完成：${okCount} 个成功，${failCount} 个失败，可在原片管理中重新解析`
+        : `视频解析完成：${okCount} 个成功`);
     }else{
       renderBody();
       scrollChatBottom();
     }
   }, 300);
+}
+function retryParseClip(id){
+  if((state.maxStage || 0) >= 1 || state.parseStatus === 'parsing') return;
+  const idx = state.clips.findIndex(c=> c.id === id);
+  if(idx < 0 || state.clipParse[id] !== 'fail') return;
+  state.clipParse[id] = 'parsing';
+  renderBody();
+  toast(`正在重新解析第 ${idx + 1} 集视频`);
+  const timer = setTimeout(()=>{
+    parseRetryTimers.delete(id);
+    if(state.clipParse[id] !== 'parsing') return;
+    state.clipParse[id] = 'ok';
+    if(state.parseFailId === id) state.parseFailId = '';
+    const left = state.clips.filter(c=> state.clipParse[c.id] !== 'ok').length;
+    renderBody();
+    toast(left
+      ? `第 ${idx + 1} 集重新解析成功`
+      : `第 ${idx + 1} 集重新解析成功，全部视频已解析完成`);
+  }, 2200);
+  parseRetryTimers.set(id, timer);
 }
 function chatMessages(){
   const msgs = [];
@@ -754,11 +790,12 @@ function chatMessages(){
             <div class="cparse-meta"><span>${state.parseProgress}%</span><span>已解析 ${pc.ok}/${clipN} 个视频${pc.parsing?` · 正在解析第 ${state.clips.findIndex(c=>state.clipParse[c.id]==='parsing')+1} 个`:''}</span></div>
           </div>`});
       }else{
-        msgs.push({who:'a', html:`视频解析完成：<b>${pc.ok} 个成功</b> · ${pc.fail} 个失败 · ${pc.unparsed} 个未解析。
-          <div class="cparse done">
-            <div class="cparse-head"><span class="cparse-check">✓</span><b>原片解析完成</b><span>耗时 ${PARSE_SECONDS} 秒</span></div>
-            <div class="cparse-bar"><i style="width:100%"></i></div>
-            <div class="cparse-meta"><span>100%</span><span>已识别剧情结构与台词语义</span></div>
+        const retrying = pc.parsing > 0;
+        msgs.push({who:'a', html:`视频解析完成：<b>${pc.ok} 个成功</b> · ${pc.fail} 个失败 · ${pc.unparsed} 个未解析${retrying?` · ${pc.parsing} 个重新解析中`:''}。
+          <div class="cparse ${pc.fail || retrying ? 'warn' : 'done'}">
+            <div class="cparse-head"><span class="cparse-check">${pc.fail || retrying ? '!' : '✓'}</span><b>${retrying ? '正在重新解析失败视频' : pc.fail ? '部分视频解析失败' : '原片解析完成'}</b><span>${retrying ? '请稍候' : `耗时 ${PARSE_SECONDS} 秒`}</span></div>
+            <div class="cparse-bar"><i style="width:${retrying ? Math.max(20, Math.round(pc.ok / clipN * 100)) : 100}%"></i></div>
+            <div class="cparse-meta"><span>${retrying ? '重试中' : '100%'}</span><span>${retrying ? '正在重新解析，请稍候' : pc.fail ? '可在右侧原片管理点击「重新解析」' : '已识别剧情结构与台词语义'}</span></div>
           </div>`,
           action:'提取资产', go:'asset'});
       }
@@ -884,7 +921,7 @@ function clipsHTML(){
       <div class="clip-thumb"><img src="${img}" alt="">${c.from==='pan'?'<span class="clip-src">☁ 网盘</span>':c.from==='local'?'<span class="clip-src">本地</span>':''}<span class="clip-play">▶</span><span class="clip-dur">${c.dur}</span></div>
       <div class="clip-meta">
         <div class="clip-label">
-          <div class="clip-title-row"><b>第 ${i+1} 集</b><span class="clip-status ${ps}">${ps==='parsing'?'<i class="ps-dot"></i>':''}${psLabel}</span></div>
+          <div class="clip-title-row"><b>第 ${i+1} 集</b><span class="clip-status ${ps}">${ps==='parsing'?'<i class="ps-dot"></i>':''}${psLabel}</span>${ps==='fail' && (state.maxStage||0) < 1 && state.parseStatus !== 'parsing' ? `<button class="clip-retry" type="button" data-retry="${c.id}">↻ 重新解析</button>` : ''}</div>
           <span class="clip-name" title="${esc(c.name)}">${esc(c.name)}</span>
         </div>
         ${locked?'':`<button class="clip-del" data-i="${i}">✕</button>`}
@@ -895,10 +932,14 @@ function clipsHTML(){
     ? `<div class="parse-summary"><span class="ps-legend"><i class="dot ok"></i>解析成功 <b>${pc.ok}</b></span><span class="ps-legend"><i class="dot fail"></i>解析失败 <b>${pc.fail}</b></span><span class="ps-legend"><i class="dot idle"></i>未解析 <b>${pc.unparsed}</b></span><span class="ps-live">确认原片后开始解析</span></div>`
     : state.parseStatus === 'parsing'
       ? `<div class="parse-summary"><span class="ps-legend"><i class="dot ok"></i>解析成功 <b>${pc.ok}</b></span><span class="ps-legend"><i class="dot fail"></i>解析失败 <b>${pc.fail}</b></span><span class="ps-legend"><i class="dot idle"></i>未解析 <b>${pc.unparsed}</b></span><span class="ps-live"><span class="spin xs"></span>解析中 ${state.parseProgress}%</span></div>`
-      : `<div class="parse-summary"><span class="ps-legend"><i class="dot ok"></i>解析成功 <b>${pc.ok}</b></span><span class="ps-legend"><i class="dot fail"></i>解析失败 <b>${pc.fail}</b></span><span class="ps-legend"><i class="dot idle"></i>未解析 <b>${pc.unparsed}</b></span><span class="ps-live done">✓ 解析完成</span></div>`;
+      : `<div class="parse-summary"><span class="ps-legend"><i class="dot ok"></i>解析成功 <b>${pc.ok}</b></span><span class="ps-legend"><i class="dot fail"></i>解析失败 <b>${pc.fail}</b></span><span class="ps-legend"><i class="dot idle"></i>未解析 <b>${pc.unparsed}</b></span>${pc.parsing
+        ? '<span class="ps-live"><span class="spin xs"></span>重新解析中</span>'
+        : pc.fail
+          ? `<span class="ps-live warn">⚠ ${pc.fail} 个视频解析失败，请点击重新解析</span>`
+          : '<span class="ps-live done">✓ 解析完成</span>'}</div>`;
   return `<div class="mgr ${locked?'is-locked':''}">
     <div class="mgr-head">
-      <div>原片管理 <em>${state.clips.length} ${state.clipSource==='pan'?'个视频':'集'}</em>${locked?'<span class="mgr-lock">🔒 已确认 · 仅可查看</span>':''}</div>
+      <div>原片管理 <em>${state.clips.length} ${state.clipSource==='pan'?'个视频':'集'}</em>${locked?`<span class="mgr-lock">🔒 已确认 · ${pc.fail || pc.parsing ? '可重新解析失败视频' : '仅可查看'}</span>`:''}</div>
       ${locked?'':'<button class="tb-primary" id="addClip">＋ 上传原片</button>'}
     </div>
     ${parseSummary}
@@ -906,7 +947,11 @@ function clipsHTML(){
     <p class="mgr-tip">${locked
       ? state.parseStatus==='parsing'
         ? '原片已确认，正在解析视频，请稍候；解析结果会实时更新'
-        : '原片已确认并锁定，仅支持预览查看；如需更换请返回入口重新创建项目'
+        : pc.parsing
+          ? '正在重新解析失败视频，请稍候；解析结果会实时更新'
+          : pc.fail
+            ? '原片已确认并锁定；解析失败的视频可点击「重新解析」，其余内容仅支持预览查看'
+            : '原片已确认并锁定，仅支持预览查看；如需更换请返回入口重新创建项目'
       : '拖拽卡片可调整顺序 · 点击缩略图预览 · ✕ 删除'}</p>
   </div>`;
 }
@@ -927,6 +972,8 @@ function bindClips(){
   });
   $$('#clipGrid .clip-del').forEach(b=> b.onclick=e=>{ e.stopPropagation();
     state.clips.splice(+b.dataset.i,1); renderBody(); toast('已删除'); });
+  $$('#clipGrid [data-retry]').forEach(b=> b.onclick=e=>{ e.stopPropagation();
+    retryParseClip(b.dataset.retry); });
   const add = $('#addClip');
   if(add) add.onclick = ()=>{
     const n = state.clips.length+1;

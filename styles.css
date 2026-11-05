@@ -231,6 +231,11 @@ button{font-family:inherit}
 .cparse-bar{height:6px;border-radius:4px;background:#e6eaf5;overflow:hidden;margin:9px 0 6px}
 .cparse-bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#8ea2ff,#b39af4);transition:width .28s}
 .cparse.done .cparse-bar i{background:var(--ok)}
+.cparse.warn{border-color:#f3cbc8;background:#fffafa}
+.cparse.warn .cparse-head b{color:#c4433c}
+.cparse.warn .cparse-bar i{background:#e8564f}
+.cparse.warn .cparse-meta span:first-child{color:#d84a43;font-weight:600}
+.cparse.warn .cparse-check{background:rgba(216,74,67,.12);color:#d84a43}
 .cparse-meta{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text-3)}
 .cparse.done .cparse-meta span:first-child{color:var(--ok);font-weight:600}
 .cparse-check{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:rgba(34,179,107,.12);color:var(--ok);font-size:11px;font-weight:700}
@@ -281,6 +286,9 @@ button{font-family:inherit}
 .clip-status.parsing{color:#5a6bd8;background:#eef1ff}
 .clip-status.ok{color:var(--ok);background:rgba(34,179,107,.1)}
 .clip-status.fail{color:#d84a43;background:#fff0ef}
+.clip-retry{flex:none;border:none;background:#fff0ef;color:#d84a43;font:inherit;font-size:10.5px;font-weight:600;line-height:1.2;padding:3px 7px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:.15s}
+.clip-retry:hover{background:#d84a43;color:#fff}
+.clip-retry:focus-visible{outline:2px solid #d84a43;outline-offset:1px}
 .ps-dot{width:6px;height:6px;border-radius:50%;background:#6e82f0;animation:psPulse 1s infinite}
 @keyframes psPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
 .clip-name{max-width:100%;font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -295,6 +303,7 @@ button{font-family:inherit}
 .ps-legend .dot.idle{background:#a5adc0}
 .ps-live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;color:#5a6bd8;font-weight:600}
 .ps-live.done{color:var(--ok)}
+.ps-live.warn{color:#d84a43}
 .mgr-tip{color:var(--text-3);font-size:12px;margin-top:18px}
 .stage-flash{animation:stageFlash .7s ease-out}
 @keyframes stageFlash{0%{box-shadow:inset 0 0 0 2px rgba(47,107,237,.55)}100%{box-shadow:inset 0 0 0 2px rgba(47,107,237,0)}}
