@@ -1624,6 +1624,7 @@ function shotHTML(){
   const beforeFrame = drawScene(sh.scene,'orig');
   const activeVer = activeShotVersion(sh);
   const afterFrame = sh.done ? shotStill(sh) : shotPlaceholderSVG();
+  const view = state.shotView === 'before' ? 'before' : 'after';
   const afterMain = gen
     ? `<div class="sb-view skeleton"><span class="spin"></span></div>`
     : sh.done
@@ -1632,15 +1633,13 @@ function shotHTML(){
   const verTag = sh.done && activeVer
     ? `<button type="button" class="sb-hist-link" data-shot-hist="${state.activeShot}" title="查看该分镜的生成历史">V${activeVer.v} · ${shotVersions(sh).length} 个版本</button>`
     : '';
-  const main = `<div class="sb-pair">
-    <div class="sb-side">
-      <div class="sb-side-head"><b>转绘前</b><span>原片</span></div>
-      <div class="sb-player"><div class="sb-view"><img src="${beforeFrame}" alt="转绘前"></div></div>
-    </div>
-    <div class="sb-side">
-      <div class="sb-side-head"><b>转绘后</b>${verTag}</div>
-      <div class="sb-player">${afterMain}</div>
-    </div>
+  const viewFrame = view === 'before'
+    ? `<div class="sb-view"><img src="${beforeFrame}" alt="转绘前"></div>`
+    : afterMain;
+  const main = `<div class="sb-player">${viewFrame}</div>`;
+  const viewSwitch = `<div class="sb-view-switch" role="group" aria-label="切换分镜视频展示">
+    <button type="button" data-shot-view="before" class="${view==='before'?'on':''}">转绘前</button>
+    <button type="button" data-shot-view="after" class="${view==='after'?'on':''}">转绘后</button>
   </div>`;
   const ep = state.episodes[state.activeEp];
   const doneCount = state.shots.filter(s=>s.done).length;
@@ -1683,8 +1682,14 @@ function shotHTML(){
     <div class="sb-split">
       <section class="sb-pane sb-video">
         <div class="sb-pane-head">
-          <b>分镜视频</b>
-          <span class="sb-state ${sh.done?'ok':''}">${status}</span>
+          <div class="sb-pane-title">
+            <b>分镜视频</b>
+            <span class="sb-state ${sh.done?'ok':''}">${status}</span>
+          </div>
+          <div class="sb-pane-tools">
+            ${view==='after'?verTag:''}
+            ${viewSwitch}
+          </div>
         </div>
         ${main}
         <div class="sb-video-foot">
@@ -1710,6 +1715,7 @@ function shotHTML(){
 }
 function genShot(i){
   const sh = state.shots[i]; if(!sh || state.generating.has(sh.id)) return;
+  state.shotView = 'after';
   state.generating.add(sh.id); renderBody();
   setTimeout(()=>{
     state.generating.delete(sh.id);
@@ -1774,6 +1780,7 @@ function bindShotHistory(){
     const v = versions.find(x=>x.id===state.historyPick);
     if(!v){ toast('请选择一个版本'); return; }
     sh.activeVersion = v.id;
+    state.shotView = 'after';
     const idx = state.historyShot;
     state.historyShot = null; state.historyPick = null;
     closeModal(); renderBody();
@@ -1880,6 +1887,11 @@ function exportShotsDefault(){
 function bindShot(){
   const exportBtn = $('#exportShots');
   if(exportBtn) exportBtn.onclick = exportShotsDefault;
+  $$('[data-shot-view]').forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
+    state.shotView = b.dataset.shotView === 'before' ? 'before' : 'after';
+    renderBody();
+  });
   $$('#strip .shotc').forEach(el=> el.onclick=()=>{
     const i = +el.dataset.i;
     if(state.shotBatch){

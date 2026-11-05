@@ -748,6 +748,7 @@ const state = {
   assetSel: new Set(),                    // 批量生成勾选
   shots: SHOTS.map(x=>({...x})),
   activeShot: 0,
+  shotView:"after",                        // 分镜视频展示：after 转绘后 | before 转绘前
   shotBatch: false,                       // 批量转绘选择模式
   shotSel: new Set(),                     // 批量转绘勾选的分镜下标
   selShots: new Set(),
